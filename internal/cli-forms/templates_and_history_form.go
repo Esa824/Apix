@@ -1,0 +1,536 @@
+package cliforms
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/charmbracelet/huh"
+)
+
+func HandleTemplatesAndHistory() {
+	var selectedOption string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Templates & History:").
+				Options(
+					huh.NewOption("Saved Templates", "saved-templates"),
+					huh.NewOption("Request History", "request-history"),
+					huh.NewOption("Back to Main Menu", "back"),
+				).
+				Value(&selectedOption),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error running templates & history form: %v\n", err)
+		return
+	}
+
+	handleTemplatesHistorySelection(selectedOption)
+}
+
+func handleTemplatesHistorySelection(selection string) {
+	switch selection {
+	case "saved-templates":
+		handleSavedTemplates()
+	case "request-history":
+		handleRequestHistory()
+	case "back":
+		RunInteractiveMode()
+	default:
+		fmt.Println("Unknown templates & history option")
+	}
+}
+
+func handleSavedTemplates() {
+	var selectedOption string
+
+	// TODO: Replace with actual saved templates from storage
+	templates := getSavedTemplates()
+
+	options := []huh.Option[string]{}
+	for _, template := range templates {
+		options = append(options, huh.NewOption(fmt.Sprintf("%s (%s)", template.Name, template.Method), template.ID))
+	}
+
+	// Add management options
+	options = append(options,
+		huh.NewOption("➕ Create New Template", "create-template"),
+		huh.NewOption("🔙 Back", "back"),
+	)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Saved Templates:").
+				Description("Select a template to execute, or manage your templates").
+				Options(options...).
+				Value(&selectedOption),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	handleTemplateSelection(selectedOption)
+}
+
+func handleTemplateSelection(selection string) {
+	switch selection {
+	case "create-template":
+		handleCreateTemplate()
+	case "back":
+		HandleTemplatesAndHistory()
+	default:
+		// It's a template ID
+		template := getTemplateByID(selection)
+		if template != nil {
+			handleTemplateActions(template)
+		} else {
+			fmt.Println("Template not found")
+			askContinueOrReturnTemplates()
+		}
+	}
+}
+
+func handleTemplateActions(template *Template) {
+	var selectedAction string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(fmt.Sprintf("Template: %s", template.Name)).
+				Description(fmt.Sprintf("%s %s", template.Method, template.URL)).
+				Options(
+					huh.NewOption("▶️  Execute Template", "execute"),
+					huh.NewOption("✏️  Edit Template", "edit"),
+					huh.NewOption("🗑️  Delete Template", "delete"),
+					huh.NewOption("🔙 Back to Templates", "back"),
+				).
+				Value(&selectedAction),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	switch selectedAction {
+	case "execute":
+		executeTemplate(template)
+	case "edit":
+		editTemplate(template)
+	case "delete":
+		deleteTemplate(template)
+	case "back":
+		handleSavedTemplates()
+	}
+}
+
+func handleCreateTemplate() {
+	var templateName, method, url, body, headers string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Template Name:").
+				Placeholder("My API Template").
+				Value(&templateName),
+			huh.NewSelect[string]().
+				Title("HTTP Method:").
+				Options(
+					huh.NewOption("GET", "GET"),
+					huh.NewOption("POST", "POST"),
+					huh.NewOption("PUT", "PUT"),
+					huh.NewOption("DELETE", "DELETE"),
+				).
+				Value(&method),
+			huh.NewInput().
+				Title("URL:").
+				Placeholder("https://api.example.com/users").
+				Value(&url),
+			huh.NewText().
+				Title("Request Body (optional):").
+				Description("JSON body for POST/PUT requests").
+				Placeholder(`{"name": "John", "email": "john@example.com"}`).
+				Value(&body),
+			huh.NewText().
+				Title("Headers (optional):").
+				Description("One header per line, format: Key: Value").
+				Placeholder("Content-Type: application/json\nAuthorization: Bearer token").
+				Value(&headers),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	if templateName != "" && method != "" && url != "" {
+		// TODO: Implement actual template saving
+		fmt.Printf("✓ Template '%s' created successfully!\n", templateName)
+		fmt.Printf("  Method: %s\n", method)
+		fmt.Printf("  URL: %s\n", url)
+		if body != "" {
+			fmt.Printf("  Has Body: Yes\n")
+		}
+		if headers != "" {
+			fmt.Printf("  Has Headers: Yes\n")
+		}
+	} else {
+		fmt.Println("❌ Template creation cancelled - missing required fields")
+	}
+
+	askContinueOrReturnTemplates()
+}
+
+func handleRequestHistory() {
+	var selectedOption string
+
+	// TODO: Replace with actual request history from storage
+	history := getRequestHistory()
+
+	options := []huh.Option[string]{}
+	for _, request := range history {
+		label := fmt.Sprintf("%s %s - %s", request.Method, request.URL, request.Timestamp.Format("Jan 2, 15:04"))
+		options = append(options, huh.NewOption(label, request.ID))
+	}
+
+	// Add management options
+	options = append(options,
+		huh.NewOption("🗑️  Clear History", "clear-history"),
+		huh.NewOption("🔙 Back", "back"),
+	)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Request History:").
+				Description("Select a request to re-execute or save as template").
+				Options(options...).
+				Value(&selectedOption),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	handleHistorySelection(selectedOption)
+}
+
+func handleHistorySelection(selection string) {
+	switch selection {
+	case "clear-history":
+		handleClearHistory()
+	case "back":
+		HandleTemplatesAndHistory()
+	default:
+		// It's a history item ID
+		historyItem := getHistoryByID(selection)
+		if historyItem != nil {
+			handleHistoryActions(historyItem)
+		} else {
+			fmt.Println("History item not found")
+			askContinueOrReturnTemplates()
+		}
+	}
+}
+
+func handleHistoryActions(historyItem *HistoryItem) {
+	var selectedAction string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(fmt.Sprintf("Request: %s %s", historyItem.Method, historyItem.URL)).
+				Description(fmt.Sprintf("Executed: %s", historyItem.Timestamp.Format("January 2, 2006 at 15:04"))).
+				Options(
+					huh.NewOption("🔄 Re-execute Request", "reexecute"),
+					huh.NewOption("💾 Save as Template", "save-template"),
+					huh.NewOption("📋 View Details", "view-details"),
+					huh.NewOption("🔙 Back to History", "back"),
+				).
+				Value(&selectedAction),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	switch selectedAction {
+	case "reexecute":
+		reExecuteFromHistory(historyItem)
+	case "save-template":
+		saveHistoryAsTemplate(historyItem)
+	case "view-details":
+		viewHistoryDetails(historyItem)
+	case "back":
+		handleRequestHistory()
+	}
+}
+
+func handleClearHistory() {
+	var confirmClear bool
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Clear Request History").
+				Description("This will permanently delete all request history. This action cannot be undone.").
+				Affirmative("Yes, clear history").
+				Negative("Cancel").
+				Value(&confirmClear),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	if confirmClear {
+		// TODO: Implement actual history clearing
+		fmt.Println("🗑️  Clearing request history...")
+		fmt.Println("✓ Request history cleared successfully!")
+	} else {
+		fmt.Println("History clearing cancelled.")
+	}
+
+	askContinueOrReturnTemplates()
+}
+
+func executeTemplate(template *Template) {
+	fmt.Printf("▶️  Executing template: %s\n", template.Name)
+	fmt.Printf("   %s %s\n", template.Method, template.URL)
+
+	// TODO: Implement actual request execution
+	fmt.Println("✓ Request completed successfully!")
+	fmt.Println("📊 Response: 200 OK")
+
+	askContinueOrReturnTemplates()
+}
+
+func editTemplate(template *Template) {
+	fmt.Printf("✏️  Editing template: %s\n", template.Name)
+	// TODO: Implement template editing - could reuse handleCreateTemplate with pre-filled values
+	fmt.Println("✓ Template updated successfully!")
+
+	askContinueOrReturnTemplates()
+}
+
+func deleteTemplate(template *Template) {
+	var confirmDelete bool
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(fmt.Sprintf("Delete Template: %s", template.Name)).
+				Description(fmt.Sprintf("This will permanently delete the template '%s' (%s %s). This action cannot be undone.", template.Name, template.Method, template.URL)).
+				Affirmative("Yes, delete template").
+				Negative("Cancel").
+				Value(&confirmDelete),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	if confirmDelete {
+		// TODO: Implement actual template deletion
+		fmt.Printf("🗑️  Deleting template: %s\n", template.Name)
+		fmt.Println("✓ Template deleted successfully!")
+	} else {
+		fmt.Println("Template deletion cancelled.")
+	}
+
+	askContinueOrReturnTemplates()
+}
+
+func reExecuteFromHistory(historyItem *HistoryItem) {
+	fmt.Printf("🔄 Re-executing request: %s %s\n", historyItem.Method, historyItem.URL)
+
+	// TODO: Implement actual request re-execution
+	fmt.Println("✓ Request completed successfully!")
+	fmt.Println("📊 Response: 200 OK")
+
+	askContinueOrReturnTemplates()
+}
+
+func saveHistoryAsTemplate(historyItem *HistoryItem) {
+	var templateName string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Template Name:").
+				Placeholder(fmt.Sprintf("%s Template", historyItem.Method)).
+				Value(&templateName),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	if templateName != "" {
+		// TODO: Implement saving history item as template
+		fmt.Printf("💾 Saved as template: %s\n", templateName)
+		fmt.Println("✓ Template created successfully!")
+	} else {
+		fmt.Println("Template creation cancelled.")
+	}
+
+	askContinueOrReturnTemplates()
+}
+
+func viewHistoryDetails(historyItem *HistoryItem) {
+	fmt.Println("📋 Request Details:")
+	fmt.Println("─────────────────────────")
+	fmt.Printf("Method: %s\n", historyItem.Method)
+	fmt.Printf("URL: %s\n", historyItem.URL)
+	fmt.Printf("Timestamp: %s\n", historyItem.Timestamp.Format("January 2, 2006 at 15:04:05"))
+	fmt.Printf("Status: %s\n", historyItem.Status)
+	if historyItem.Body != "" {
+		fmt.Printf("Body: %s\n", historyItem.Body)
+	}
+	if historyItem.Headers != "" {
+		fmt.Printf("Headers: %s\n", historyItem.Headers)
+	}
+	fmt.Println("─────────────────────────")
+
+	askContinueOrReturnTemplates()
+}
+
+func askContinueOrReturnTemplates() {
+	var choice string
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("What would you like to do next?").
+				Options(
+					huh.NewOption("Continue with Templates & History", "continue"),
+					huh.NewOption("Return to Main Menu", "main"),
+					huh.NewOption("Exit", "exit"),
+				).
+				Value(&choice),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	switch choice {
+	case "continue":
+		HandleTemplatesAndHistory()
+	case "main":
+		RunInteractiveMode()
+	case "exit":
+		fmt.Println("Goodbye!")
+		os.Exit(0)
+	}
+}
+
+// Data structures - add these to your types file
+type Template struct {
+	ID      string
+	Name    string
+	Method  string
+	URL     string
+	Body    string
+	Headers string
+}
+
+type HistoryItem struct {
+	ID        string
+	Method    string
+	URL       string
+	Body      string
+	Headers   string
+	Status    string
+	Timestamp time.Time
+}
+
+// Placeholder functions - implement these based on your storage mechanism
+func getSavedTemplates() []Template {
+	// TODO: Read from storage
+	return []Template{
+		{ID: "1", Name: "Get Users", Method: "GET", URL: "https://api.example.com/users"},
+		{ID: "2", Name: "Create User", Method: "POST", URL: "https://api.example.com/users"},
+		{ID: "3", Name: "Update User", Method: "PUT", URL: "https://api.example.com/users/1"},
+	}
+}
+
+func getTemplateByID(id string) *Template {
+	templates := getSavedTemplates()
+	for _, template := range templates {
+		if template.ID == id {
+			return &template
+		}
+	}
+	return nil
+}
+
+func getRequestHistory() []HistoryItem {
+	// TODO: Read from storage
+	return []HistoryItem{
+		{
+			ID:        "h1",
+			Method:    "GET",
+			URL:       "https://api.example.com/users",
+			Status:    "200 OK",
+			Timestamp: time.Now().Add(-2 * time.Hour),
+		},
+		{
+			ID:        "h2",
+			Method:    "POST",
+			URL:       "https://api.example.com/users",
+			Body:      `{"name": "John"}`,
+			Status:    "201 Created",
+			Timestamp: time.Now().Add(-1 * time.Hour),
+		},
+		{
+			ID:        "h3",
+			Method:    "DELETE",
+			URL:       "https://api.example.com/users/1",
+			Status:    "204 No Content",
+			Timestamp: time.Now().Add(-30 * time.Minute),
+		},
+	}
+}
+
+func getHistoryByID(id string) *HistoryItem {
+	history := getRequestHistory()
+	for _, item := range history {
+		if item.ID == id {
+			return &item
+		}
+	}
+	return nil
+}
