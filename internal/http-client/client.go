@@ -69,7 +69,7 @@ func (c *Client) Do(opts RequestOptions) (*resty.Response, error) {
 		req = req.SetBasicAuth(opts.Auth.Username, opts.Auth.Password)
 	}
 
-	return c.resty.R().Execute(opts.Method, opts.URL)
+	return req.Execute(opts.Method, opts.URL)
 }
 
 // Convenience methods for common HTTP methods:

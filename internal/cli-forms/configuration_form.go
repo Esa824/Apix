@@ -7,6 +7,10 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
+var (
+	BaseURL string
+)
+
 func HandleConfiguration() {
 	var selectedOption string
 
@@ -68,7 +72,7 @@ func handleSetBaseURL() {
 	}
 
 	if baseURL != "" {
-		// TODO: Implement saving base URL to config
+		BaseURL = baseURL
 		fmt.Printf("Base URL set to: %s\n", baseURL)
 		fmt.Println("✓ Configuration saved successfully!")
 	} else {
@@ -83,9 +87,8 @@ func handleViewConfig() {
 	// TODO: Implement reading configuration from file/storage
 	fmt.Println("📋 Current Configuration:")
 	fmt.Println("─────────────────────────")
-	fmt.Printf("Base URL: %s\n", getBaseURL())                       // You'll implement this
-	fmt.Printf("Auth Token: %s\n", maskAuthToken(getAuthToken()))    // You'll implement this
-	fmt.Printf("Default Headers: %d configured\n", getHeaderCount()) // You'll implement this
+	fmt.Printf("Base URL: %s\n", BaseURL)
+	fmt.Printf("Auth Profile: %s\n", ActiveProfile)
 	fmt.Println("─────────────────────────")
 
 	askContinueOrReturnConfiguration()
@@ -153,12 +156,6 @@ func askContinueOrReturnConfiguration() {
 		fmt.Println("Goodbye!")
 		os.Exit(0)
 	}
-}
-
-// Placeholder functions - implement these based on your config storage mechanism
-func getBaseURL() string {
-	// TODO: Read from config file/storage
-	return "Not set"
 }
 
 func getAuthToken() string {

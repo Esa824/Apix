@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
-
 	hc "apix/internal/http-client"
+	"apix/internal/utils"
 )
 
 // HTTPResponse holds the response data and provides querying capabilities
@@ -21,35 +19,30 @@ type HTTPResponse struct {
 	Headers    map[string]string
 	Body       []byte
 	IsJSON     bool
-	ParsedJSON interface{}
+	ParsedJSON any
+}
+
+type FileUpload struct {
+	Path      string
+	FieldName string
 }
 
 func HandleHttpRequests() {
-	var selectedOption string
+	choice, err := utils.AskSelection("HTTP Requests:", []utils.SelectionOption{
+		{"GET Request", "get"},
+		{"POST Request", "post"},
+		{"PUT Request", "put"},
+		{"PATCH Request", "patch"},
+		{"DELETE Request", "delete"},
+		{"Back to Main Menu", "back"},
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("HTTP Requests:").
-				Options(
-					huh.NewOption("GET Request", "get"),
-					huh.NewOption("POST Request", "post"),
-					huh.NewOption("PUT Request", "put"),
-					huh.NewOption("PATCH Request", "patch"),
-					huh.NewOption("DELETE Request", "delete"),
-					huh.NewOption("Back to Main Menu", "back"),
-				).
-				Value(&selectedOption),
-		),
-	)
-
-	err := form.Run()
 	if err != nil {
-		showError("Error running HTTP requests form", err)
+		utils.ShowError("Error running HTTP requests form", err)
 		return
 	}
 
-	handleHttpSelection(selectedOption)
+	handleHttpSelection(choice)
 }
 
 func handleHttpSelection(selection string) {
@@ -67,25 +60,32 @@ func handleHttpSelection(selection string) {
 	case "back":
 		RunInteractiveMode()
 	default:
-		showMessage("Unknown HTTP request option", "error")
+		utils.ShowWarning("Unknown HTTP request option")
 		HandleHttpRequests()
 	}
 }
 
 // GET Request Handler
 func handleGetRequest() {
-	endpoint := getEndpointInput()
-	if endpoint == "" {
-		showMessage("No endpoint provided. Returning to menu.", "info")
-		HandleHttpRequests()
+	endpoint, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter API endpoint:",
+		Description: "Will be appended to base URL if configured",
+		Placeholder: "/api/users or https://api.example.com/users",
+		Required:    true,
+	})
+
+	if err != nil || endpoint == "" {
+		utils.ShowMessage("No endpoint provided. Returning to menu.")
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	options := handleRequestOptions("GET")
-	response, err := hc.NewClient(10*time.Second).Get(endpoint, options.Headers, options.QueryParams)
+	endpoint = fmt.Sprintf("%s%s", BaseURL, strings.TrimSpace(endpoint))
+	options := handleRequestOptions("GET", endpoint, "")
+	response, err := hc.NewClient(10 * time.Second).Do(options)
 	if err != nil {
-		showError("Error while calling endpoint", err)
-		HandleHttpRequests()
+		utils.ShowError("Error while calling endpoint", err)
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
@@ -94,19 +94,16 @@ func handleGetRequest() {
 
 // POST Request Handler
 func handlePostRequest() {
-	endpoint := getEndpointInput()
+	endpoint, body := getEndpointAndBody("POST")
 	if endpoint == "" {
-		showMessage("No endpoint provided. Returning to menu.", "info")
-		HandleHttpRequests()
 		return
 	}
 
-	_, body := handleBodyTypeSelection()
-	options := handleRequestOptions("POST")
-	response, err := hc.NewClient(10*time.Second).Post(endpoint, options.Headers, body)
+	options := handleRequestOptions("POST", endpoint, body)
+	response, err := hc.NewClient(10 * time.Second).Do(options)
 	if err != nil {
-		showError("Error while calling endpoint", err)
-		HandleHttpRequests()
+		utils.ShowError("Error while calling endpoint", err)
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
@@ -115,19 +112,16 @@ func handlePostRequest() {
 
 // PUT Request Handler
 func handlePutRequest() {
-	endpoint := getEndpointInput()
+	endpoint, body := getEndpointAndBody("PUT")
 	if endpoint == "" {
-		showMessage("No endpoint provided. Returning to menu.", "info")
-		HandleHttpRequests()
 		return
 	}
 
-	_, body := handleBodyTypeSelection()
-	options := handleRequestOptions("PUT")
-	response, err := hc.NewClient(10*time.Second).Put(endpoint, options.Headers, body)
+	options := handleRequestOptions("PUT", endpoint, body)
+	response, err := hc.NewClient(10 * time.Second).Do(options)
 	if err != nil {
-		showError("Error while calling endpoint", err)
-		HandleHttpRequests()
+		utils.ShowError("Error while calling endpoint", err)
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
@@ -136,19 +130,16 @@ func handlePutRequest() {
 
 // PATCH Request Handler
 func handlePatchRequest() {
-	endpoint := getEndpointInput()
+	endpoint, body := getEndpointAndBody("PATCH")
 	if endpoint == "" {
-		showMessage("No endpoint provided. Returning to menu.", "info")
-		HandleHttpRequests()
 		return
 	}
 
-	_, body := handlePatchBodyTypeSelection()
-	options := handleRequestOptions("PATCH")
-	response, err := hc.NewClient(10*time.Second).Patch(endpoint, options.Headers, body)
+	options := handleRequestOptions("PATCH", endpoint, body)
+	response, err := hc.NewClient(10 * time.Second).Do(options)
 	if err != nil {
-		showError("Error while calling endpoint", err)
-		HandleHttpRequests()
+		utils.ShowError("Error while calling endpoint", err)
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
@@ -157,99 +148,90 @@ func handlePatchRequest() {
 
 // DELETE Request Handler
 func handleDeleteRequest() {
-	endpoint := getEndpointInput()
-	if endpoint == "" {
-		showMessage("No endpoint provided. Returning to menu.", "info")
-		HandleHttpRequests()
+	endpoint, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter API endpoint:",
+		Description: "Will be appended to base URL if configured",
+		Placeholder: "/api/users/1 or https://api.example.com/users/1",
+		Required:    true,
+	})
+
+	if err != nil || endpoint == "" {
+		utils.ShowMessage("No endpoint provided. Returning to menu.")
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	options := handleRequestOptions("DELETE")
+	endpoint = fmt.Sprintf("%s%s", BaseURL, strings.TrimSpace(endpoint))
 
 	// Confirmation prompt for DELETE
-	var confirmDelete bool
-	confirmForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Confirm DELETE Request").
-				Description(fmt.Sprintf("Are you sure you want to send a DELETE request to: %s", endpoint)).
-				Affirmative("Yes, delete").
-				Negative("Cancel").
-				Value(&confirmDelete),
-		),
+	confirmed, err := utils.AskDangerousConfirmation(
+		"Delete Resource",
+		"Are you sure you want to send a DELETE request to",
+		endpoint,
 	)
 
-	err := confirmForm.Run()
 	if err != nil {
-		showError("Error running confirmation form", err)
+		utils.ShowError("Error running confirmation", err)
 		return
 	}
 
-	if !confirmDelete {
-		showMessage("DELETE request cancelled.", "info")
-		HandleHttpRequests()
+	if !confirmed {
+		utils.ShowMessage("DELETE request cancelled.")
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	// Fix: Use Delete method instead of Patch
-	response, err := hc.NewClient(10*time.Second).Delete(endpoint, options.Headers, options)
+	options := handleRequestOptions("DELETE", endpoint, "")
+	response, err := hc.NewClient(10 * time.Second).Do(options)
 	if err != nil {
-		showError("Error while calling endpoint", err)
-		HandleHttpRequests()
+		utils.ShowError("Error while calling endpoint", err)
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
 	handleResponse(response)
 }
 
-// Helper function to get endpoint input
-func getEndpointInput() string {
-	var endpoint string
+// Helper function to get endpoint and body for POST/PUT/PATCH
+func getEndpointAndBody(method string) (string, string) {
+	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+		{
+			Title:       "Enter API endpoint:",
+			Description: "Will be appended to base URL if configured",
+			Placeholder: "/api/users or https://api.example.com/users",
+			Required:    true,
+		},
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter API endpoint:").
-				Description("Will be appended to base URL if configured").
-				Placeholder("/api/users or https://api.example.com/users").
-				Value(&endpoint),
-		),
-	)
-
-	err := form.Run()
-	if err != nil {
-		showError("Error getting endpoint input", err)
-		return ""
+	if err != nil || len(inputs) == 0 || inputs[0] == "" {
+		utils.ShowMessage("No endpoint provided. Returning to menu.")
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
+		return "", ""
 	}
 
-	return strings.TrimSpace(endpoint)
+	fullEndpoint := fmt.Sprintf("%s%s", BaseURL, strings.TrimSpace(inputs[0]))
+	_, body := handleBodyTypeSelection(method)
+
+	return fullEndpoint, body
 }
 
 // Enhanced response handler with JSON querying
-func handleResponse(response interface{}) {
-	// Convert response to our HTTPResponse type
+func handleResponse(response any) {
 	httpResp := parseResponse(response)
-
-	// Display the response
 	displayResponse(httpResp)
 
-	// If it's JSON, offer querying options
 	if httpResp.IsJSON {
 		handleJSONQuerying(httpResp)
 	} else {
-		askContinueOrReturnHttpRequests()
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Another Request", "Main Menu")
 	}
 }
 
-func parseResponse(response interface{}) *HTTPResponse {
-	// This is a simplified version - you'll need to adapt based on your actual response type
-	// Assuming your response has methods like Body(), Status(), etc.
-
+func parseResponse(response any) *HTTPResponse {
 	var body []byte
 	var status string
 
 	// Use reflection or type assertion to extract data from response
-	// This is a placeholder - adjust based on your actual response structure
 	if resp, ok := response.(interface{ Body() []byte }); ok {
 		body = resp.Body()
 	}
@@ -279,71 +261,48 @@ func displayResponse(response *HTTPResponse) {
 		response.Status,
 		string(response.Body))
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("HTTP Response").
-				Description(responseText),
-		),
-	)
-
-	form.Run()
+	utils.DisplayFormattedText("🌐 HTTP Response", responseText)
 }
 
 func handleJSONQuerying(response *HTTPResponse) {
 	for {
-		var choice string
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("JSON Response Options").
-					Options(
-						huh.NewOption("Query JSON", "query"),
-						huh.NewOption("View Raw Response", "raw"),
-						huh.NewOption("Continue", "continue"),
-					).
-					Value(&choice),
-			),
-		)
+		choice, err := utils.AskSelection("JSON Response Options", []utils.SelectionOption{
+			{"Query JSON", "query"},
+			{"View Response", "response"},
+			{"Continue", "continue"},
+		})
 
-		err := form.Run()
 		if err != nil {
-			showError("Error in JSON options", err)
+			utils.ShowError("Error in JSON options", err)
 			break
 		}
 
 		switch choice {
 		case "query":
 			queryJSON(response)
-		case "raw":
-			displayRawResponse(response)
+		case "response":
+			displayResponse(response)
 		case "continue":
-			askContinueOrReturnHttpRequests()
+			utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Another Request", "Main Menu")
 			return
 		}
 	}
 }
 
 func queryJSON(response *HTTPResponse) {
-	var query string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter JSON Query").
-				Description("Examples: .name, .users[0].email, .data.items").
-				Placeholder(".field.subfield").
-				Value(&query),
-		),
-	)
+	query, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter JSON Query",
+		Description: "Examples: .name, .users[0].email, .data.items",
+		Placeholder: ".field.subfield",
+	})
 
-	err := form.Run()
 	if err != nil {
-		showError("Error getting query input", err)
+		utils.ShowError("Error getting query input", err)
 		return
 	}
 
 	if strings.TrimSpace(query) == "" {
-		showMessage("No query provided", "info")
+		utils.ShowMessage("No query provided")
 		return
 	}
 
@@ -351,14 +310,12 @@ func queryJSON(response *HTTPResponse) {
 	displayQueryResult(query, result)
 }
 
-func executeJSONQuery(data interface{}, query string) interface{} {
+func executeJSONQuery(data any, query string) any {
 	if data == nil {
 		return "null"
 	}
 
-	// Remove leading dot if present
 	query = strings.TrimPrefix(query, ".")
-
 	if query == "" {
 		return data
 	}
@@ -371,7 +328,6 @@ func executeJSONQuery(data interface{}, query string) interface{} {
 			return "null"
 		}
 
-		// Handle array indexing
 		if strings.Contains(part, "[") && strings.Contains(part, "]") {
 			current = handleArrayAccess(current, part)
 		} else {
@@ -386,7 +342,7 @@ func executeJSONQuery(data interface{}, query string) interface{} {
 	return current
 }
 
-func handleArrayAccess(data interface{}, accessor string) interface{} {
+func handleArrayAccess(data any, accessor string) any {
 	parts := strings.Split(accessor, "[")
 	fieldName := parts[0]
 	indexStr := strings.TrimSuffix(parts[1], "]")
@@ -396,7 +352,6 @@ func handleArrayAccess(data interface{}, accessor string) interface{} {
 		return "Invalid array index"
 	}
 
-	// Get the field first if it exists
 	if fieldName != "" {
 		data = handleFieldAccess(data, fieldName)
 		if data == nil {
@@ -404,9 +359,8 @@ func handleArrayAccess(data interface{}, accessor string) interface{} {
 		}
 	}
 
-	// Handle array access
 	switch arr := data.(type) {
-	case []interface{}:
+	case []any:
 		if index < 0 || index >= len(arr) {
 			return "Array index out of bounds"
 		}
@@ -416,18 +370,18 @@ func handleArrayAccess(data interface{}, accessor string) interface{} {
 	}
 }
 
-func handleFieldAccess(data interface{}, field string) interface{} {
+func handleFieldAccess(data any, field string) any {
 	switch obj := data.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return obj[field]
-	case map[interface{}]interface{}:
+	case map[any]any:
 		return obj[field]
 	default:
 		return nil
 	}
 }
 
-func displayQueryResult(query string, result interface{}) {
+func displayQueryResult(query string, result any) {
 	var resultStr string
 
 	if result == nil {
@@ -436,7 +390,7 @@ func displayQueryResult(query string, result interface{}) {
 		switch v := result.(type) {
 		case string:
 			resultStr = v
-		case map[string]interface{}, []interface{}:
+		case map[string]any, []any:
 			if jsonBytes, err := json.MarshalIndent(v, "", "  "); err == nil {
 				resultStr = string(jsonBytes)
 			} else {
@@ -448,87 +402,40 @@ func displayQueryResult(query string, result interface{}) {
 	}
 
 	displayText := fmt.Sprintf("Query: %s\n\nResult:\n%s", query, resultStr)
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Query Result").
-				Description(displayText),
-		),
-	)
-
-	form.Run()
+	utils.DisplayFormattedText("🔍 Query Result", displayText)
 }
 
-func displayRawResponse(response *HTTPResponse) {
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Raw Response").
-				Description(string(response.Body)),
-		),
-	)
+// Body Type Selection
+func handleBodyTypeSelection(method string) (string, string) {
+	var options []utils.SelectionOption
 
-	form.Run()
-}
+	if method == "PATCH" {
+		options = []utils.SelectionOption{
+			{"JSON", "json"},
+			{"Form Data", "form"},
+			{"Raw Text", "raw"},
+			{"No Body", "none"},
+		}
+	} else {
+		options = []utils.SelectionOption{
+			{"JSON", "json"},
+			{"Form Data", "form"},
+			{"Multipart Form", "multipart"},
+			{"Raw Text", "raw"},
+			{"File Upload", "file"},
+			{"No Body", "none"},
+		}
+	}
 
-// Body Type Selection for POST/PUT
-func handleBodyTypeSelection() (string, string) {
-	var bodyType string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select Body Type:").
-				Options(
-					huh.NewOption("JSON", "json"),
-					huh.NewOption("Form Data", "form"),
-					huh.NewOption("Multipart Form", "multipart"),
-					huh.NewOption("Raw Text", "raw"),
-					huh.NewOption("File Upload", "file"),
-					huh.NewOption("No Body", "none"),
-				).
-				Value(&bodyType),
-		),
-	)
-
-	err := form.Run()
+	bodyType, err := utils.AskSelection("Select Body Type:", options)
 	if err != nil {
-		showError("Error selecting body type", err)
+		utils.ShowError("Error selecting body type", err)
 		return "none", ""
 	}
 
 	return bodyType, handleBodyInput(bodyType)
 }
 
-// Body Type Selection for PATCH (limited options)
-func handlePatchBodyTypeSelection() (string, string) {
-	var bodyType string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select Body Type:").
-				Options(
-					huh.NewOption("JSON", "json"),
-					huh.NewOption("Form Data", "form"),
-					huh.NewOption("Raw Text", "raw"),
-					huh.NewOption("No Body", "none"),
-				).
-				Value(&bodyType),
-		),
-	)
-
-	err := form.Run()
-	if err != nil {
-		showError("Error selecting body type", err)
-		return "none", ""
-	}
-
-	return bodyType, handleBodyInput(bodyType)
-}
-
-// Handle Body Input based on type
 func handleBodyInput(bodyType string) string {
 	switch bodyType {
 	case "json":
@@ -547,28 +454,22 @@ func handleBodyInput(bodyType string) string {
 }
 
 func handleJSONInput() string {
-	var jsonBody string
+	jsonBody, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter JSON Body:",
+		Placeholder: `{"name": "John Doe", "email": "john@example.com"}`,
+		Multiline:   true,
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewText().
-				Title("Enter JSON Body:").
-				Placeholder(`{"name": "John Doe", "email": "john@example.com"}`).
-				Value(&jsonBody),
-		),
-	)
-
-	err := form.Run()
 	if err != nil {
-		showError("Error getting JSON input", err)
+		utils.ShowError("Error getting JSON input", err)
 		return ""
 	}
 
 	// Validate JSON
 	if strings.TrimSpace(jsonBody) != "" {
-		var temp interface{}
+		var temp any
 		if err := json.Unmarshal([]byte(jsonBody), &temp); err != nil {
-			showError("Invalid JSON format", err)
+			utils.ShowError("Invalid JSON format", err)
 			return handleJSONInput() // Retry
 		}
 	}
@@ -577,270 +478,202 @@ func handleJSONInput() string {
 }
 
 func handleFormDataInput() string {
-	var formData string
+	formData, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter Form Data:",
+		Description: "Format: key1=value1&key2=value2",
+		Placeholder: "name=John Doe&email=john@example.com",
+		Multiline:   true,
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewText().
-				Title("Enter Form Data:").
-				Description("Format: key1=value1&key2=value2").
-				Placeholder("name=John Doe&email=john@example.com").
-				Value(&formData),
-		),
-	)
+	if err != nil {
+		utils.ShowError("Error getting form data", err)
+		return ""
+	}
 
-	form.Run()
 	return formData
 }
 
 func handleMultipartFormInput() string {
-	var multipartData string
+	multipartData, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter Multipart Form Data:",
+		Description: "Format: key1=value1&key2=value2",
+		Placeholder: "name=John Doe&email=john@example.com&file=@/path/to/file",
+		Multiline:   true,
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewText().
-				Title("Enter Multipart Form Data:").
-				Description("Format: key1=value1&key2=value2").
-				Placeholder("name=John Doe&email=john@example.com&file=@/path/to/file").
-				Value(&multipartData),
-		),
-	)
+	if err != nil {
+		utils.ShowError("Error getting multipart data", err)
+		return ""
+	}
 
-	form.Run()
 	return multipartData
 }
 
 func handleRawTextInput() string {
-	var rawText string
+	rawText, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter Raw Text:",
+		Placeholder: "Enter your raw text content here...",
+		Multiline:   true,
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewText().
-				Title("Enter Raw Text:").
-				Placeholder("Enter your raw text content here...").
-				Value(&rawText),
-		),
-	)
+	if err != nil {
+		utils.ShowError("Error getting raw text", err)
+		return ""
+	}
 
-	form.Run()
 	return rawText
 }
 
 func handleFileUploadInput() string {
-	var filePath, fieldName string
+	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+		{
+			Title:       "Enter file path:",
+			Placeholder: "/path/to/your/file.jpg",
+			Required:    true,
+		},
+		{
+			Title:       "Enter field name:",
+			Placeholder: "image",
+			Required:    true,
+		},
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter file path:").
-				Placeholder("/path/to/your/file.jpg").
-				Value(&filePath),
-			huh.NewInput().
-				Title("Enter field name:").
-				Placeholder("image").
-				Value(&fieldName),
-		),
-	)
+	if err != nil || len(inputs) < 2 {
+		utils.ShowError("Error getting file upload info", err)
+		return ""
+	}
 
-	form.Run()
-	return fmt.Sprintf("file:%s;field:%s", filePath, fieldName)
-}
-
-// Request Options Structure
-type RequestOptions struct {
-	Headers        map[string]string
-	QueryParams    map[string]string
-	AuthType       string
-	AuthValue      string
-	Files          []FileUpload
-	SaveAsTemplate bool
-}
-
-type FileUpload struct {
-	Path      string
-	FieldName string
+	return fmt.Sprintf("file:%s;field:%s", inputs[0], inputs[1])
 }
 
 // Handle Request Options
-func handleRequestOptions(method string) RequestOptions {
-	options := RequestOptions{
+func handleRequestOptions(method string, endpoint string, body string) hc.RequestOptions {
+	options := hc.RequestOptions{
+		Method:      method,
+		URL:         endpoint,
+		Body:        body,
 		Headers:     make(map[string]string),
 		QueryParams: make(map[string]string),
 	}
 
 	// Add Headers?
-	var addHeaders bool
-	headerForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Add Headers?").
-				Value(&addHeaders),
-		),
-	)
-	headerForm.Run()
-
-	if addHeaders {
-		options.Headers = handleHeaders()
+	if addHeaders, _ := utils.AskConfirmation("Add Headers?", "", "", ""); addHeaders {
+		options.Headers = collectKeyValuePairs("Header", "Content-Type", "application/json")
 	}
 
 	// Add Query Parameters?
-	var addParams bool
-	paramForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Add Query Parameters?").
-				Value(&addParams),
-		),
-	)
-	paramForm.Run()
-
-	if addParams {
-		options.QueryParams = handleQueryParams()
+	if addParams, _ := utils.AskConfirmation("Add Query Parameters?", "", "", ""); addParams {
+		options.QueryParams = collectKeyValuePairs("Parameter", "page", "1")
 	}
 
 	// Authentication?
-	var addAuth bool
-	authForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Add Authentication?").
-				Value(&addAuth),
-		),
-	)
-	authForm.Run()
-
-	if addAuth {
-		options.AuthType, options.AuthValue = handleAuthentication()
+	if addAuth, _ := utils.AskConfirmation("Add Authentication?", "", "", ""); addAuth {
+		authType, authValue := handleAuthentication()
+		if authType != "" && authValue != "" {
+			applyAuthentication(&options, authType, authValue)
+		}
 	}
 
 	// Add Files/Images? (for POST/PUT only)
 	if method == "POST" || method == "PUT" {
-		var addFiles bool
-		fileForm := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Add Files/Images?").
-					Value(&addFiles),
-			),
-		)
-		fileForm.Run()
-
-		if addFiles {
-			options.Files = handleFileUploads()
+		if addFiles, _ := utils.AskConfirmation("Add Files/Images?", "", "", ""); addFiles {
+			//options.Files = handleFileUploads()
 		}
 	}
 
 	// Save as Template?
-	var saveTemplate bool
-	templateForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Save as Template?").
-				Value(&saveTemplate),
-		),
-	)
-	templateForm.Run()
-
-	options.SaveAsTemplate = saveTemplate
+	//	options.SaveAsTemplate, _ = utils.AskConfirmation("Save as Template?", "", "", "")
 
 	return options
 }
 
-func handleHeaders() map[string]string {
-	headers := make(map[string]string)
+// applyAuthentication applies the authentication to the request options
+func applyAuthentication(options *hc.RequestOptions, authType, authValue string) {
+	switch authType {
+	case "bearer":
+		// Add Authorization header with Bearer token
+		options.Headers["Authorization"] = fmt.Sprintf(" Bearer %s", authValue)
 
-	for {
-		var key, value string
-		var addMore bool
-
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Header Key:").
-					Placeholder("Content-Type").
-					Value(&key),
-				huh.NewInput().
-					Title("Header Value:").
-					Placeholder("application/json").
-					Value(&value),
-				huh.NewConfirm().
-					Title("Add another header?").
-					Value(&addMore),
-			),
-		)
-
-		err := form.Run()
-		if err != nil || strings.TrimSpace(key) == "" {
-			break
+	case "apikey":
+		// Parse the header:key format
+		parts := strings.SplitN(authValue, ":", 2)
+		if len(parts) == 2 {
+			headerName := parts[0]
+			apiKey := parts[1]
+			options.Headers[headerName] = apiKey
+		} else {
+			// Fallback to default header if parsing fails
+			options.Headers["X-API-Key"] = authValue
 		}
 
-		headers[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	case "basic":
+		// Parse the username:password format
+		parts := strings.SplitN(authValue, ":", 2)
+		if len(parts) == 2 {
+			username := parts[0]
+			password := parts[1]
 
-		if !addMore {
-			break
+			// Option 1: Use the BasicAuth struct if your http client supports it
+			options.Auth = &hc.BasicAuth{
+				Username: username,
+				Password: password,
+			}
+
+			// Option 2: Or add Authorization header with base64 encoded credentials
+			// credentials := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
+			// options.Headers["Authorization"] = fmt.Sprintf("Basic %s", credentials)
 		}
+
+	default:
+		utils.ShowWarning(fmt.Sprintf("Unknown authentication type: %s", authType))
 	}
-
-	return headers
 }
 
-func handleQueryParams() map[string]string {
-	params := make(map[string]string)
+func collectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string) map[string]string {
+	items := make(map[string]string)
 
 	for {
-		var key, value string
-		var addMore bool
+		inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+			{
+				Title:       fmt.Sprintf("%s Key:", itemType),
+				Placeholder: keyPlaceholder,
+				Required:    true,
+			},
+			{
+				Title:       fmt.Sprintf("%s Value:", itemType),
+				Placeholder: valuePlaceholder,
+				Required:    true,
+			},
+		})
 
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Parameter Key:").
-					Placeholder("page").
-					Value(&key),
-				huh.NewInput().
-					Title("Parameter Value:").
-					Placeholder("1").
-					Value(&value),
-				huh.NewConfirm().
-					Title("Add another parameter?").
-					Value(&addMore),
-			),
-		)
-
-		err := form.Run()
-		if err != nil || strings.TrimSpace(key) == "" {
+		if err != nil || len(inputs) < 2 || inputs[0] == "" {
 			break
 		}
 
-		params[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		items[strings.TrimSpace(inputs[0])] = strings.TrimSpace(inputs[1])
 
+		addMore, _ := utils.AskConfirmation(fmt.Sprintf("Add another %s?", strings.ToLower(itemType)), "", "", "")
 		if !addMore {
 			break
 		}
 	}
 
-	return params
+	return items
 }
 
 func handleAuthentication() (string, string) {
-	var authType string
+	selectOptions := []utils.SelectionOption{
+		{"Bearer Token", "bearer"},
+		{"API Key", "apikey"},
+		{"Basic Auth", "basic"},
+	}
+	if ActiveProfile != "" {
+		selectOptions = append(selectOptions, utils.SelectionOption{"Use Auth Profile", "profile"})
+	}
+	authType, err := utils.AskSelection("Select Authentication Type:", selectOptions)
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select Authentication Type:").
-				Options(
-					huh.NewOption("Bearer Token", "bearer"),
-					huh.NewOption("API Key", "apikey"),
-					huh.NewOption("Basic Auth", "basic"),
-				).
-				Value(&authType),
-		),
-	)
-
-	err := form.Run()
 	if err != nil {
-		showError("Error selecting auth type", err)
+		utils.ShowError("Error selecting auth type", err)
 		return "", ""
 	}
 
@@ -851,103 +684,167 @@ func handleAuthentication() (string, string) {
 		return handleAPIKey()
 	case "basic":
 		return handleBasicAuth()
+	case "profile":
+		return handleAuthProfile()
 	default:
 		return "", ""
 	}
 }
 
 func handleBearerToken() (string, string) {
-	var token string
+	token, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter Bearer Token:",
+		Placeholder: "your-jwt-token-here",
+		Password:    true,
+		Required:    true,
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter Bearer Token:").
-				Placeholder("your-jwt-token-here").
-				Password(true).
-				Value(&token),
-		),
-	)
+	if err != nil {
+		utils.ShowError("Error getting bearer token", err)
+		return "", ""
+	}
 
-	form.Run()
 	return "bearer", token
 }
 
 func handleAPIKey() (string, string) {
-	var apiKey, headerName string
+	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+		{
+			Title:    "Enter API Key:",
+			Password: true,
+			Required: true,
+		},
+		{
+			Title:       "Header Name (optional):",
+			Placeholder: "X-API-Key",
+		},
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter API Key:").
-				Password(true).
-				Value(&apiKey),
-			huh.NewInput().
-				Title("Header Name (optional):").
-				Placeholder("X-API-Key").
-				Value(&headerName),
-		),
-	)
+	if err != nil || len(inputs) < 2 {
+		utils.ShowError("Error getting API key", err)
+		return "", ""
+	}
 
-	form.Run()
+	headerName := inputs[1]
 	if headerName == "" {
 		headerName = "X-API-Key"
 	}
-	return "apikey", fmt.Sprintf("%s:%s", headerName, apiKey)
+
+	return "apikey", fmt.Sprintf("%s:%s", headerName, inputs[0])
 }
 
 func handleBasicAuth() (string, string) {
-	var username, password string
+	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+		{
+			Title:    "Username:",
+			Required: true,
+		},
+		{
+			Title:    "Password:",
+			Password: true,
+			Required: true,
+		},
+	})
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Username:").
-				Value(&username),
-			huh.NewInput().
-				Title("Password:").
-				Password(true).
-				Value(&password),
-		),
-	)
+	if err != nil || len(inputs) < 2 {
+		utils.ShowError("Error getting basic auth", err)
+		return "", ""
+	}
 
-	form.Run()
-	return "basic", fmt.Sprintf("%s:%s", username, password)
+	return "basic", fmt.Sprintf("%s:%s", inputs[0], inputs[1])
+}
+
+func handleAuthProfile() (string, string) {
+	if ActiveProfile == "" {
+		utils.ShowError("No active profile", fmt.Errorf("no authentication profile is currently active"))
+		return "", ""
+	}
+
+	authProfile, exists := AuthProfiles[ActiveProfile]
+	if !exists {
+		utils.ShowError("Profile not found", fmt.Errorf("authentication profile '%s' not found", ActiveProfile))
+		return "", ""
+	}
+
+	// Check if profile is active
+	if !authProfile.Active {
+		utils.ShowError("Profile inactive", fmt.Errorf("authentication profile '%s' is not active", ActiveProfile))
+		return "", ""
+	}
+
+	// Check if profile has expired
+	if authProfile.Expiry != nil && time.Now().After(*authProfile.Expiry) {
+		utils.ShowError("Profile expired", fmt.Errorf("authentication profile '%s' has expired", ActiveProfile))
+		return "", ""
+	}
+
+	switch authProfile.Type {
+	case "bearer":
+		if authProfile.Token == "" {
+			utils.ShowError("Invalid profile", fmt.Errorf("bearer token is empty in profile '%s'", ActiveProfile))
+			return "", ""
+		}
+		return "bearer", authProfile.Token
+
+	case "apikey":
+		if authProfile.APIKey == "" {
+			utils.ShowError("Invalid profile", fmt.Errorf("API key is empty in profile '%s'", ActiveProfile))
+			return "", ""
+		}
+		headerName := authProfile.Header
+		if headerName == "" {
+			headerName = "X-API-Key" // Default header name
+		}
+		return "apikey", fmt.Sprintf("%s:%s", headerName, authProfile.APIKey)
+
+	case "basic":
+		if authProfile.Username == "" || authProfile.Password == "" {
+			utils.ShowError("Invalid profile", fmt.Errorf("username or password is empty in profile '%s'", ActiveProfile))
+			return "", ""
+		}
+		return "basic", fmt.Sprintf("%s:%s", authProfile.Username, authProfile.Password)
+
+	case "oauth":
+		if authProfile.Token == "" {
+			utils.ShowError("Invalid profile", fmt.Errorf("OAuth token is empty in profile '%s'", ActiveProfile))
+			return "", ""
+		}
+		// OAuth tokens are typically used as bearer tokens
+		return "bearer", authProfile.Token
+
+	default:
+		utils.ShowError("Unsupported auth type", fmt.Errorf("authentication type '%s' in profile '%s' is not supported", authProfile.Type, ActiveProfile))
+		return "", ""
+	}
 }
 
 func handleFileUploads() []FileUpload {
 	var files []FileUpload
 
 	for {
-		var filePath, fieldName string
-		var addMore bool
+		inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
+			{
+				Title:       "File Path:",
+				Placeholder: "/path/to/file.jpg",
+				Required:    true,
+			},
+			{
+				Title:       "Field Name:",
+				Placeholder: "image",
+				Required:    true,
+			},
+		})
 
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("File Path:").
-					Placeholder("/path/to/file.jpg").
-					Value(&filePath),
-				huh.NewInput().
-					Title("Field Name:").
-					Placeholder("image").
-					Value(&fieldName),
-				huh.NewConfirm().
-					Title("Add another file?").
-					Value(&addMore),
-			),
-		)
-
-		err := form.Run()
-		if err != nil || strings.TrimSpace(filePath) == "" {
+		if err != nil || len(inputs) < 2 || inputs[0] == "" {
 			break
 		}
 
 		files = append(files, FileUpload{
-			Path:      strings.TrimSpace(filePath),
-			FieldName: strings.TrimSpace(fieldName),
+			Path:      strings.TrimSpace(inputs[0]),
+			FieldName: strings.TrimSpace(inputs[1]),
 		})
 
+		addMore, _ := utils.AskConfirmation("Add another file?", "", "", "")
 		if !addMore {
 			break
 		}
@@ -961,7 +858,7 @@ func FormatJSON(data []byte) ([]byte, bool) {
 		return data, false
 	}
 
-	var raw interface{}
+	var raw any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return data, false
 	}
@@ -974,67 +871,3 @@ func FormatJSON(data []byte) ([]byte, bool) {
 	formatted = bytes.TrimSuffix(formatted, []byte("\n"))
 	return formatted, true
 }
-
-func askContinueOrReturnHttpRequests() {
-	var choice string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("What would you like to do next?").
-				Options(
-					huh.NewOption("Make Another Request", "continue"),
-					huh.NewOption("Return to Main Menu", "main"),
-					huh.NewOption("Exit", "exit"),
-				).
-				Value(&choice),
-		),
-	)
-
-	err := form.Run()
-	if err != nil {
-		showError("Error in continuation menu", err)
-		return
-	}
-
-	switch choice {
-	case "continue":
-		HandleHttpRequests()
-	case "main":
-		RunInteractiveMode()
-	case "exit":
-		showMessage("Goodbye!", "info")
-		os.Exit(0)
-	}
-}
-
-// Helper functions for consistent UI messaging
-func showMessage(message, msgType string) {
-	var title string
-	switch msgType {
-	case "error":
-		title = "Error"
-	case "success":
-		title = "Success"
-	case "info":
-		title = "Information"
-	default:
-		title = "Message"
-	}
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title(title).
-				Description(message),
-		),
-	)
-
-	form.Run()
-}
-
-func showError(message string, err error) {
-	errorText := fmt.Sprintf("%s: %v", message, err)
-	showMessage(errorText, "error")
-}
-

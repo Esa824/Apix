@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"github.com/charmbracelet/huh"
-
-	cc "apix/internal/cobra-commands"
 )
 
 func RunInteractiveMode() {
@@ -47,10 +45,8 @@ func handleSelection(selection string) {
 		HandleHttpRequests()
 	case "templates-and-history":
 		HandleTemplatesAndHistory()
-	case "delete":
-		cc.HandleDeleteRequest()
-	case "headers":
-		handleHeaders()
+	case "authentication-management":
+		HandleAuthenticationManagement()
 	case "auth":
 		handleAuthentication()
 	case "exit":

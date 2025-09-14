@@ -14,12 +14,11 @@ func HandleTemplatesAndHistory() {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Templates & History:").
-				Options(
-					huh.NewOption("Saved Templates", "saved-templates"),
-					huh.NewOption("Request History", "request-history"),
-					huh.NewOption("Back to Main Menu", "back"),
-				).
+				Title("Templates & History:").Options(
+				huh.NewOption("Saved Templates", "saved-templates"),
+				huh.NewOption("Request History", "request-history"),
+				huh.NewOption("Back to Main Menu", "back"),
+			).
 				Value(&selectedOption),
 		),
 	)
