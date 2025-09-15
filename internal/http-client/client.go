@@ -3,11 +3,17 @@ package httpclient
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 )
+
+var ConfigPath = "./testconfigs/config1/"
 
 type Client struct {
 	resty *resty.Client
@@ -69,7 +75,11 @@ func (c *Client) Do(opts RequestOptions) (*resty.Response, error) {
 		req = req.SetBasicAuth(opts.Auth.Username, opts.Auth.Password)
 	}
 
-	return req.Execute(opts.Method, opts.URL)
+	response, err := req.Execute(opts.Method, opts.URL)
+	if err != nil {
+		UpdateHistory(opts)
+	}
+	return response, err
 }
 
 // Convenience methods for common HTTP methods:
@@ -117,4 +127,14 @@ func (c *Client) Delete(url string, headers map[string]string, body any) (*resty
 		Headers: headers,
 		Body:    body,
 	})
+}
+
+func UpdateHistory(request RequestOptions) error {
+	filepath := filepath.Join(ConfigPath, "history")
+	data, err := json.MarshalIndent(request, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal auth profile: %w", err)
+	}
+
+	return os.WriteFile(filepath, data, 0600)
 }

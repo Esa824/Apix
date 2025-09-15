@@ -1,0 +1,11 @@
+{
+  "name": "Street",
+  "type": "bearer",
+  "token": "skadjkajsd",
+  "username": "",
+  "password": "",
+  "api_key": "",
+  "header": "",
+  "expiry": null,
+  "active": true
+}

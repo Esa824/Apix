@@ -1,7 +1,10 @@
 package cliforms
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -10,22 +13,111 @@ import (
 
 // AuthProfile represents an authentication profile
 type AuthProfile struct {
-	Name     string
-	Type     string // "bearer", "apikey", "basic", "oauth"
-	Token    string
-	Username string
-	Password string
-	APIKey   string
-	Header   string
-	Expiry   *time.Time
-	Active   bool
+	Name     string     `json:"name"`
+	Type     string     `json:"type"` // "bearer", "apikey", "basic", "oauth"
+	Token    string     `json:"token"`
+	Username string     `json:"username"`
+	Password string     `json:"password"`
+	APIKey   string     `json:"api_key"`
+	Header   string     `json:"header"`
+	Expiry   *time.Time `json:"expiry"`
+	Active   bool       `json:"active"`
 }
 
 // Global storage for auth profiles (in a real app, this would be persisted)
 var AuthProfiles = make(map[string]*AuthProfile)
 var ActiveProfile string
 
+// initAuthProfilesDir ensures the auth-profiles directory exists
+func initAuthProfilesDir() error {
+	authProfilesDir := filepath.Join(ConfigPath, "auth-profiles")
+	return os.MkdirAll(authProfilesDir, 0755)
+}
+
+// saveAuthProfile saves a single auth profile to a JSON file
+func saveAuthProfile(profile *AuthProfile) error {
+	if err := initAuthProfilesDir(); err != nil {
+		return fmt.Errorf("failed to create auth-profiles directory: %w", err)
+	}
+
+	authProfilesDir := filepath.Join(ConfigPath, "auth-profiles")
+	filename := fmt.Sprintf("%s.json", profile.Name)
+	filepath := filepath.Join(authProfilesDir, filename)
+
+	data, err := json.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal auth profile: %w", err)
+	}
+
+	return os.WriteFile(filepath, data, 0600)
+}
+
+// deleteAuthProfileFile deletes the JSON file for an auth profile
+func deleteAuthProfileFile(profileName string) error {
+	authProfilesDir := filepath.Join(ConfigPath, "auth-profiles")
+	filename := fmt.Sprintf("%s.json", profileName)
+	filepath := filepath.Join(authProfilesDir, filename)
+
+	if err := os.Remove(filepath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete auth profile file: %w", err)
+	}
+	return nil
+}
+
+// loadAuthProfiles loads all auth profiles from the auth-profiles directory
+func loadAuthProfiles() error {
+	authProfilesDir := filepath.Join(ConfigPath, "auth-profiles")
+
+	// Check if directory exists
+	if _, err := os.Stat(authProfilesDir); os.IsNotExist(err) {
+		return nil // No profiles directory yet, that's okay
+	}
+
+	entries, err := os.ReadDir(authProfilesDir)
+	if err != nil {
+		return fmt.Errorf("failed to read auth-profiles directory: %w", err)
+	}
+
+	AuthProfiles = make(map[string]*AuthProfile)
+	ActiveProfile = ""
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		filepath := filepath.Join(authProfilesDir, entry.Name())
+		data, err := os.ReadFile(filepath)
+		if err != nil {
+			utils.ShowWarning(fmt.Sprintf("Failed to read auth profile file %s: %v", entry.Name(), err))
+			continue
+		}
+
+		var profile AuthProfile
+		if err := json.Unmarshal(data, &profile); err != nil {
+			utils.ShowWarning(fmt.Sprintf("Failed to parse auth profile file %s: %v", entry.Name(), err))
+			continue
+		}
+
+		AuthProfiles[profile.Name] = &profile
+		if profile.Active {
+			if ActiveProfile != "" {
+				// Multiple active profiles found, deactivate others
+				AuthProfiles[ActiveProfile].Active = false
+			}
+			ActiveProfile = profile.Name
+		}
+	}
+
+	return nil
+}
+
 func HandleAuthenticationManagement() {
+	// Load existing profiles when starting auth management
+	if err := loadAuthProfiles(); err != nil {
+		utils.ShowError("Error loading auth profiles", err)
+	}
+
 	options := []utils.SelectionOption{
 		{"Create New Auth Profile", "create-profile"},
 		{"Select Active Profile", "select-profile"},
@@ -128,8 +220,14 @@ func handleCreateProfile() {
 		return
 	}
 
-	// Save profile
+	// Save profile to memory and disk
 	AuthProfiles[profileName] = profile
+	if err := saveAuthProfile(profile); err != nil {
+		utils.ShowError("Failed to save auth profile", err)
+		delete(AuthProfiles, profileName) // Remove from memory if save failed
+		return
+	}
+
 	utils.ShowSuccess(fmt.Sprintf("Auth profile '%s' created successfully!", profileName))
 
 	// Ask if this should be the active profile
@@ -140,9 +238,17 @@ func handleCreateProfile() {
 	)
 
 	if err == nil && setAsActive {
-		AuthProfiles[ActiveProfile].Active = false
+		if ActiveProfile != "" {
+			AuthProfiles[ActiveProfile].Active = false
+			if err := saveAuthProfile(AuthProfiles[ActiveProfile]); err != nil {
+				utils.ShowWarning("Failed to update previous active profile")
+			}
+		}
 		ActiveProfile = profileName
 		AuthProfiles[ActiveProfile].Active = true
+		if err := saveAuthProfile(AuthProfiles[ActiveProfile]); err != nil {
+			utils.ShowWarning("Failed to save active profile status")
+		}
 		utils.ShowSuccess(fmt.Sprintf("'%s' is now the active profile", profileName))
 	}
 
@@ -259,6 +365,11 @@ func handleBasicAuthSetup(profile *AuthProfile) bool {
 }
 
 func handleSelectProfile() {
+	if err := loadAuthProfiles(); err != nil {
+		utils.ShowError("Error loading auth profiles", err)
+		return
+	}
+
 	if len(AuthProfiles) == 0 {
 		utils.ShowMessage("No auth profiles found. Create one first.")
 		askContinueOrReturnAuth()
@@ -278,14 +389,31 @@ func handleSelectProfile() {
 		utils.ShowError("Error selecting profile", err)
 		return
 	}
-	AuthProfiles[ActiveProfile].Active = false
+
+	// Update active status
+	if ActiveProfile != "" {
+		AuthProfiles[ActiveProfile].Active = false
+		if err := saveAuthProfile(AuthProfiles[ActiveProfile]); err != nil {
+			utils.ShowWarning("Failed to update previous active profile")
+		}
+	}
+
 	ActiveProfile = selectedProfile
 	AuthProfiles[ActiveProfile].Active = true
+	if err := saveAuthProfile(AuthProfiles[ActiveProfile]); err != nil {
+		utils.ShowWarning("Failed to save active profile status")
+	}
+
 	utils.ShowSuccess(fmt.Sprintf("'%s' is now the active profile", selectedProfile))
 	askContinueOrReturnAuth()
 }
 
 func handleEditProfile() {
+	if err := loadAuthProfiles(); err != nil {
+		utils.ShowError("Error loading auth profiles", err)
+		return
+	}
+
 	if len(AuthProfiles) == 0 {
 		utils.ShowMessage("No auth profiles found. Create one first.")
 		askContinueOrReturnAuth()
@@ -316,12 +444,21 @@ func handleEditProfile() {
 	}
 
 	if success {
+		if err := saveAuthProfile(profile); err != nil {
+			utils.ShowError("Failed to save updated profile", err)
+			return
+		}
 		utils.ShowSuccess(fmt.Sprintf("Profile '%s' updated successfully!", selectedProfile))
 	}
 	askContinueOrReturnAuth()
 }
 
 func handleDeleteProfile() {
+	if err := loadAuthProfiles(); err != nil {
+		utils.ShowError("Error loading auth profiles", err)
+		return
+	}
+
 	if len(AuthProfiles) == 0 {
 		utils.ShowMessage("No auth profiles found.")
 		askContinueOrReturnAuth()
@@ -350,6 +487,13 @@ func handleDeleteProfile() {
 	}
 
 	if confirmDelete {
+		// Delete from disk first
+		if err := deleteAuthProfileFile(selectedProfile); err != nil {
+			utils.ShowError("Failed to delete profile file", err)
+			return
+		}
+
+		// Then delete from memory
 		delete(AuthProfiles, selectedProfile)
 		if ActiveProfile == selectedProfile {
 			ActiveProfile = ""
@@ -363,6 +507,11 @@ func handleDeleteProfile() {
 }
 
 func handleViewProfiles() {
+	if err := loadAuthProfiles(); err != nil {
+		utils.ShowError("Error loading auth profiles", err)
+		return
+	}
+
 	if len(AuthProfiles) == 0 {
 		utils.ShowMessage("📋 No auth profiles configured.")
 		askContinueOrReturnAuth()
@@ -421,6 +570,13 @@ func askContinueOrReturnAuth() {
 
 // GetActiveAuthProfile returns the currently active auth profile
 func GetActiveAuthProfile() *AuthProfile {
+	// Load profiles if not already loaded
+	if len(AuthProfiles) == 0 {
+		if err := loadAuthProfiles(); err != nil {
+			return nil
+		}
+	}
+
 	if ActiveProfile == "" {
 		return nil
 	}
@@ -429,5 +585,12 @@ func GetActiveAuthProfile() *AuthProfile {
 
 // GetAllAuthProfiles returns all auth profiles
 func GetAllAuthProfiles() map[string]*AuthProfile {
+	// Load profiles if not already loaded
+	if len(AuthProfiles) == 0 {
+		if err := loadAuthProfiles(); err != nil {
+			return make(map[string]*AuthProfile)
+		}
+	}
 	return AuthProfiles
 }
+

@@ -257,6 +257,9 @@ func parseResponse(response any) *HTTPResponse {
 }
 
 func displayResponse(response *HTTPResponse) {
+	if string(response.Body) == "" {
+		response.Body = []byte("Not set")
+	}
 	responseText := fmt.Sprintf("Status: %s\n\nBody:\n%s",
 		response.Status,
 		string(response.Body))

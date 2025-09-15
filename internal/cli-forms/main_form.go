@@ -7,7 +7,10 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
+var ConfigPath = "./testconfigs/config1/"
+
 func RunInteractiveMode() {
+	loadAuthProfiles()
 	var selectedOption string
 
 	form := huh.NewForm(
@@ -19,7 +22,6 @@ func RunInteractiveMode() {
 					huh.NewOption("HTTP Requests", "http-requests"),
 					huh.NewOption("Templates and History", "templates-and-history"),
 					huh.NewOption("Authentication Management", "authentication-management"),
-					huh.NewOption("Utilities", "utilities"),
 					huh.NewOption("Settings", "settings"),
 					huh.NewOption("Help", "help"),
 					huh.NewOption("Exit", "exit"),
@@ -47,8 +49,10 @@ func handleSelection(selection string) {
 		HandleTemplatesAndHistory()
 	case "authentication-management":
 		HandleAuthenticationManagement()
-	case "auth":
-		handleAuthentication()
+	case "settings":
+		HandleSettingsManagement()
+	case "help":
+		HandleHelpAndDocumentation()
 	case "exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
