@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cf "apix/internal/cli-forms"
-	cc "apix/internal/cobra-commands"
+	cf "github.com/Esa824/apix/internal/cli-forms"
+	cc "github.com/Esa824/apix/internal/cobra-commands"
 )
 
 var (

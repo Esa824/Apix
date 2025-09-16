@@ -1,4 +1,4 @@
-module apix
+module github.com/Esa824/apix
 
 go 1.24.6
 

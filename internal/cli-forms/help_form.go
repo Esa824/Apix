@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"apix/internal/utils"
+	"github.com/Esa824/apix/internal/utils"
 )
 
 // HelpSection represents a help documentation section

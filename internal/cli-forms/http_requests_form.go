@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	hc "apix/internal/http-client"
-	"apix/internal/utils"
+	hc "github.com/Esa824/apix/internal/http-client"
+	"github.com/Esa824/apix/internal/utils"
 )
 
 // HTTPResponse holds the response data and provides querying capabilities

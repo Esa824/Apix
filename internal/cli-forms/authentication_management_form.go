@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"apix/internal/utils"
+	"github.com/Esa824/apix/internal/utils"
 )
 
 // AuthProfile represents an authentication profile
@@ -593,4 +593,3 @@ func GetAllAuthProfiles() map[string]*AuthProfile {
 	}
 	return AuthProfiles
 }
-

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"apix/internal/utils"
+	"github.com/Esa824/apix/internal/utils"
 )
 
 // DisplaySettings manages output formatting preferences
