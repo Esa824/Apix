@@ -23,13 +23,13 @@ Unlike curl's verbose syntax and complex flag management, Apix provides an intui
 ### From Source
 
 ```bash
-go install github.com/yourusername/apix@latest
+go install github.com/Esa824/apix@latest
 ```
 
 ### Build Locally
 
 ```bash
-git clone https://github.com/yourusername/apix.git
+git clone https://github.com/Esa824/apix.git
 cd apix
 go build -o apix
 ```
