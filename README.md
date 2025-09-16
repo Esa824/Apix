@@ -23,7 +23,7 @@ Unlike curl's verbose syntax and complex flag management, Apix provides an intui
 ### From Source
 
 ```bash
-go install github.com/Esa824/apix@latest
+go install github.com/Esa824/apix/cmd/apix@latest
 ```
 
 ### Build Locally
