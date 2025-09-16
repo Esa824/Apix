@@ -3,7 +3,6 @@
 A CLI application that simplifies API testing and interaction.
 
 [![Go Version](https://img.shields.io/badge/Go-1.19+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-success?style=for-the-badge)](https://github.com/yourusername/apix/actions)
 
 ## Overview
@@ -120,35 +119,11 @@ Apix supports various configuration options:
 - [Cobra](https://github.com/spf13/cobra) - CLI framework
 - [Huh](https://github.com/charmbracelet/huh) - Interactive forms
 
-### Project Structure
-
-```
-apix/
-├── main.go                 # Entry point
-├── internal/
-│   ├── cli-forms/         # Interactive CLI forms (huh)
-│   └── cobra-commands/    # Command implementations
-├── go.mod
-├── go.sum
-└── README.md
-```
-
 ### Building
 
 ```bash
 # Build for current platform
-go build -o apix
-
-# Build for multiple platforms
-GOOS=linux GOARCH=amd64 go build -o apix-linux-amd64
-GOOS=windows GOARCH=amd64 go build -o apix-windows-amd64.exe
-GOOS=darwin GOARCH=amd64 go build -o apix-darwin-amd64
-```
-
-### Testing
-
-```bash
-go test ./...
+make
 ```
 
 ## Contributing
