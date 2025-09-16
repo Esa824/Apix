@@ -31,7 +31,7 @@ go install github.com/Esa824/apix@latest
 ```bash
 git clone https://github.com/Esa824/apix.git
 cd apix
-go build -o apix
+make
 ```
 
 ## Usage
