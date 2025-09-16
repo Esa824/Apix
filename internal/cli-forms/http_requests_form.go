@@ -557,6 +557,7 @@ func handleRequestOptions(method string, endpoint string, body string) hc.Reques
 		Body:        body,
 		Headers:     make(map[string]string),
 		QueryParams: make(map[string]string),
+		Time:        time.Now(),
 	}
 
 	// Add Headers?

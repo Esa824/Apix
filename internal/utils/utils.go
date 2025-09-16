@@ -514,3 +514,7 @@ func FilterMapByStatus[T interface{ GetActive() bool }](items map[string]T, acti
 
 	return filtered
 }
+
+func FormatTime(t time.Time) string {
+	return t.Format("Jan 2, 2006 3:04 PM")
+}

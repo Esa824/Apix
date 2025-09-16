@@ -3,9 +3,12 @@ package cliforms
 import (
 	"fmt"
 	"os"
-	"time"
+	"strconv"
 
 	"github.com/charmbracelet/huh"
+
+	hc "apix/internal/http-client"
+	"apix/internal/utils"
 )
 
 func HandleTemplatesAndHistory() {
@@ -198,12 +201,12 @@ func handleRequestHistory() {
 	var selectedOption string
 
 	// TODO: Replace with actual request history from storage
-	history := getRequestHistory()
+	history, err := hc.GetHistory()
 
 	options := []huh.Option[string]{}
 	for _, request := range history {
-		label := fmt.Sprintf("%s %s - %s", request.Method, request.URL, request.Timestamp.Format("Jan 2, 15:04"))
-		options = append(options, huh.NewOption(label, request.ID))
+		label := fmt.Sprintf("%s %s - %s", request.Method, request.URL, utils.FormatTime(request.Time))
+		options = append(options, huh.NewOption(label, strconv.Itoa(request.Id)))
 	}
 
 	// Add management options
@@ -222,7 +225,7 @@ func handleRequestHistory() {
 		),
 	)
 
-	err := form.Run()
+	err = form.Run()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -238,30 +241,32 @@ func handleHistorySelection(selection string) {
 	case "back":
 		HandleTemplatesAndHistory()
 	default:
-		// It's a history item ID
-		historyItem := getHistoryByID(selection)
-		if historyItem != nil {
-			handleHistoryActions(historyItem)
-		} else {
-			fmt.Println("History item not found")
-			askContinueOrReturnTemplates()
+		id, err := strconv.Atoi(selection)
+		if err != nil {
+			return
 		}
+		history, err := hc.GetHistory()
+		if err != nil {
+			return
+		}
+		handleHistoryActions(&history[id])
+		return
 	}
 }
 
-func handleHistoryActions(historyItem *HistoryItem) {
+func handleHistoryActions(historyItem *hc.RequestOptions) {
 	var selectedAction string
 
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title(fmt.Sprintf("Request: %s %s", historyItem.Method, historyItem.URL)).
-				Description(fmt.Sprintf("Executed: %s", historyItem.Timestamp.Format("January 2, 2006 at 15:04"))).
+				Description(fmt.Sprintf("Executed: %s", utils.FormatTime(historyItem.Time))).
 				Options(
-					huh.NewOption("🔄 Re-execute Request", "reexecute"),
-					huh.NewOption("💾 Save as Template", "save-template"),
-					huh.NewOption("📋 View Details", "view-details"),
-					huh.NewOption("🔙 Back to History", "back"),
+					huh.NewOption("Re-execute Request", "reexecute"),
+					huh.NewOption("Save as Template", "save-template"),
+					huh.NewOption("View Details", "view-details"),
+					huh.NewOption("Back to History", "back"),
 				).
 				Value(&selectedAction),
 		),
@@ -306,7 +311,7 @@ func handleClearHistory() {
 	}
 
 	if confirmClear {
-		// TODO: Implement actual history clearing
+		hc.DeleteHistory()
 		fmt.Println("🗑️  Clearing request history...")
 		fmt.Println("✓ Request history cleared successfully!")
 	} else {
@@ -366,7 +371,7 @@ func deleteTemplate(template *Template) {
 	askContinueOrReturnTemplates()
 }
 
-func reExecuteFromHistory(historyItem *HistoryItem) {
+func reExecuteFromHistory(historyItem *hc.RequestOptions) {
 	fmt.Printf("🔄 Re-executing request: %s %s\n", historyItem.Method, historyItem.URL)
 
 	// TODO: Implement actual request re-execution
@@ -376,7 +381,7 @@ func reExecuteFromHistory(historyItem *HistoryItem) {
 	askContinueOrReturnTemplates()
 }
 
-func saveHistoryAsTemplate(historyItem *HistoryItem) {
+func saveHistoryAsTemplate(historyItem *hc.RequestOptions) {
 	var templateName string
 
 	form := huh.NewForm(
@@ -405,17 +410,17 @@ func saveHistoryAsTemplate(historyItem *HistoryItem) {
 	askContinueOrReturnTemplates()
 }
 
-func viewHistoryDetails(historyItem *HistoryItem) {
+func viewHistoryDetails(historyItem *hc.RequestOptions) {
 	fmt.Println("📋 Request Details:")
 	fmt.Println("─────────────────────────")
 	fmt.Printf("Method: %s\n", historyItem.Method)
 	fmt.Printf("URL: %s\n", historyItem.URL)
-	fmt.Printf("Timestamp: %s\n", historyItem.Timestamp.Format("January 2, 2006 at 15:04:05"))
-	fmt.Printf("Status: %s\n", historyItem.Status)
+	fmt.Printf("Timestamp: %s\n", "")
+	fmt.Printf("Status: %s\n", "")
 	if historyItem.Body != "" {
 		fmt.Printf("Body: %s\n", historyItem.Body)
 	}
-	if historyItem.Headers != "" {
+	if len(historyItem.Headers) == 0 {
 		fmt.Printf("Headers: %s\n", historyItem.Headers)
 	}
 	fmt.Println("─────────────────────────")
@@ -466,16 +471,6 @@ type Template struct {
 	Headers string
 }
 
-type HistoryItem struct {
-	ID        string
-	Method    string
-	URL       string
-	Body      string
-	Headers   string
-	Status    string
-	Timestamp time.Time
-}
-
 // Placeholder functions - implement these based on your storage mechanism
 func getSavedTemplates() []Template {
 	// TODO: Read from storage
@@ -491,44 +486,6 @@ func getTemplateByID(id string) *Template {
 	for _, template := range templates {
 		if template.ID == id {
 			return &template
-		}
-	}
-	return nil
-}
-
-func getRequestHistory() []HistoryItem {
-	// TODO: Read from storage
-	return []HistoryItem{
-		{
-			ID:        "h1",
-			Method:    "GET",
-			URL:       "https://api.example.com/users",
-			Status:    "200 OK",
-			Timestamp: time.Now().Add(-2 * time.Hour),
-		},
-		{
-			ID:        "h2",
-			Method:    "POST",
-			URL:       "https://api.example.com/users",
-			Body:      `{"name": "John"}`,
-			Status:    "201 Created",
-			Timestamp: time.Now().Add(-1 * time.Hour),
-		},
-		{
-			ID:        "h3",
-			Method:    "DELETE",
-			URL:       "https://api.example.com/users/1",
-			Status:    "204 No Content",
-			Timestamp: time.Now().Add(-30 * time.Minute),
-		},
-	}
-}
-
-func getHistoryByID(id string) *HistoryItem {
-	history := getRequestHistory()
-	for _, item := range history {
-		if item.ID == id {
-			return &item
 		}
 	}
 	return nil

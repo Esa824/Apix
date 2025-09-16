@@ -1,0 +1,11 @@
+{
+  "name": "Sample",
+  "type": "bearer",
+  "token": "jsakdjaskdjaskd",
+  "username": "",
+  "password": "",
+  "api_key": "",
+  "header": "",
+  "expiry": null,
+  "active": true
+}

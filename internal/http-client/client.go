@@ -28,6 +28,7 @@ func NewClient(timeout time.Duration) *Client {
 }
 
 type RequestOptions struct {
+	Id          int
 	Method      string
 	URL         string
 	Headers     map[string]string
@@ -36,6 +37,7 @@ type RequestOptions struct {
 	Cookies     map[string]string
 	Auth        *BasicAuth
 	Context     context.Context
+	Time        time.Time
 }
 
 type BasicAuth struct {
@@ -76,7 +78,7 @@ func (c *Client) Do(opts RequestOptions) (*resty.Response, error) {
 	}
 
 	response, err := req.Execute(opts.Method, opts.URL)
-	if err != nil {
+	if err == nil {
 		UpdateHistory(opts)
 	}
 	return response, err
@@ -129,12 +131,70 @@ func (c *Client) Delete(url string, headers map[string]string, body any) (*resty
 	})
 }
 
-func UpdateHistory(request RequestOptions) error {
+// GetHistory reads and returns all request history from the history file
+func GetHistory() ([]RequestOptions, error) {
 	filepath := filepath.Join(ConfigPath, "history")
-	data, err := json.MarshalIndent(request, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal auth profile: %w", err)
+
+	// Check if file exists
+	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		// File doesn't exist, return empty array
+		return []RequestOptions{}, nil
 	}
 
-	return os.WriteFile(filepath, data, 0600)
+	// Read file contents
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read history file: %w", err)
+	}
+
+	// Handle empty file
+	if len(data) == 0 {
+		return []RequestOptions{}, nil
+	}
+
+	// Unmarshal into array
+	var history []RequestOptions
+	err = json.Unmarshal(data, &history)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal history data: %w", err)
+	}
+
+	return history, nil
+}
+
+// UpdateHistory appends a new request to the history and saves it
+func UpdateHistory(request RequestOptions) error {
+	// Get existing history
+	history, err := GetHistory()
+	if err != nil {
+		return fmt.Errorf("failed to get existing history: %w", err)
+	}
+
+	// Append new request to history
+	history = append(history, request)
+
+	if len(history) > 0 {
+		history[len(history)-1].Id = len(history) - 1
+	}
+
+	// Marshal updated history
+	data, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal history: %w", err)
+	}
+
+	// Write to file
+	filepath := filepath.Join(ConfigPath, "history")
+	err = os.WriteFile(filepath, data, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write history file: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteHistory deletes the history file
+func DeleteHistory() error {
+	filepath := filepath.Join(ConfigPath, "history")
+	return fmt.Errorf("failed to delete history: %w", os.Remove(filepath))
 }
