@@ -1,31 +1,14 @@
 package cliforms
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	hc "github.com/Esa824/apix/internal/http-client"
 	"github.com/Esa824/apix/internal/utils"
 )
-
-// HTTPResponse holds the response data and provides querying capabilities
-type HTTPResponse struct {
-	Status     string
-	StatusCode int
-	Headers    map[string]string
-	Body       []byte
-	IsJSON     bool
-	ParsedJSON any
-}
-
-type FileUpload struct {
-	Path      string
-	FieldName string
-}
 
 func HandleHttpRequests() {
 	choice, err := utils.AskSelection("HTTP Requests:", []utils.SelectionOption{
@@ -82,14 +65,14 @@ func handleGetRequest() {
 
 	endpoint = fmt.Sprintf("%s%s", BaseURL, strings.TrimSpace(endpoint))
 	options := handleRequestOptions("GET", endpoint, "")
-	response, err := hc.NewClient(10 * time.Second).Do(options)
+	response, err := hc.NewClient(10*time.Second).Do(options, true)
 	if err != nil {
 		utils.ShowError("Error while calling endpoint", err)
 		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	handleResponse(response)
+	utils.HandleResponse(response, HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 }
 
 // POST Request Handler
@@ -100,14 +83,14 @@ func handlePostRequest() {
 	}
 
 	options := handleRequestOptions("POST", endpoint, body)
-	response, err := hc.NewClient(10 * time.Second).Do(options)
+	response, err := hc.NewClient(10*time.Second).Do(options, true)
 	if err != nil {
 		utils.ShowError("Error while calling endpoint", err)
 		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	handleResponse(response)
+	utils.HandleResponse(response, HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 }
 
 // PUT Request Handler
@@ -118,14 +101,14 @@ func handlePutRequest() {
 	}
 
 	options := handleRequestOptions("PUT", endpoint, body)
-	response, err := hc.NewClient(10 * time.Second).Do(options)
+	response, err := hc.NewClient(10*time.Second).Do(options, true)
 	if err != nil {
 		utils.ShowError("Error while calling endpoint", err)
 		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	handleResponse(response)
+	utils.HandleResponse(response, HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 }
 
 // PATCH Request Handler
@@ -136,14 +119,14 @@ func handlePatchRequest() {
 	}
 
 	options := handleRequestOptions("PATCH", endpoint, body)
-	response, err := hc.NewClient(10 * time.Second).Do(options)
+	response, err := hc.NewClient(10*time.Second).Do(options, true)
 	if err != nil {
 		utils.ShowError("Error while calling endpoint", err)
 		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	handleResponse(response)
+	utils.HandleResponse(response, HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 }
 
 // DELETE Request Handler
@@ -182,14 +165,14 @@ func handleDeleteRequest() {
 	}
 
 	options := handleRequestOptions("DELETE", endpoint, "")
-	response, err := hc.NewClient(10 * time.Second).Do(options)
+	response, err := hc.NewClient(10*time.Second).Do(options, true)
 	if err != nil {
 		utils.ShowError("Error while calling endpoint", err)
 		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
 		return
 	}
 
-	handleResponse(response)
+	utils.HandleResponse(response, HandleHttpRequests, RunInteractiveMode, "Another Request", "Main Menu")
 }
 
 // Helper function to get endpoint and body for POST/PUT/PATCH
@@ -213,199 +196,6 @@ func getEndpointAndBody(method string) (string, string) {
 	_, body := handleBodyTypeSelection(method)
 
 	return fullEndpoint, body
-}
-
-// Enhanced response handler with JSON querying
-func handleResponse(response any) {
-	httpResp := parseResponse(response)
-	displayResponse(httpResp)
-
-	if httpResp.IsJSON {
-		handleJSONQuerying(httpResp)
-	} else {
-		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Another Request", "Main Menu")
-	}
-}
-
-func parseResponse(response any) *HTTPResponse {
-	var body []byte
-	var status string
-
-	// Use reflection or type assertion to extract data from response
-	if resp, ok := response.(interface{ Body() []byte }); ok {
-		body = resp.Body()
-	}
-
-	if resp, ok := response.(interface{ Status() string }); ok {
-		status = resp.Status()
-	}
-
-	formatted, isJSON := FormatJSON(body)
-
-	httpResp := &HTTPResponse{
-		Status:  status,
-		Body:    formatted,
-		IsJSON:  isJSON,
-		Headers: make(map[string]string),
-	}
-
-	if isJSON {
-		json.Unmarshal(formatted, &httpResp.ParsedJSON)
-	}
-
-	return httpResp
-}
-
-func displayResponse(response *HTTPResponse) {
-	if string(response.Body) == "" {
-		response.Body = []byte("Not set")
-	}
-	responseText := fmt.Sprintf("Status: %s\n\nBody:\n%s",
-		response.Status,
-		string(response.Body))
-
-	utils.DisplayFormattedText("🌐 HTTP Response", responseText)
-}
-
-func handleJSONQuerying(response *HTTPResponse) {
-	for {
-		choice, err := utils.AskSelection("JSON Response Options", []utils.SelectionOption{
-			{"Query JSON", "query"},
-			{"View Response", "response"},
-			{"Continue", "continue"},
-		})
-
-		if err != nil {
-			utils.ShowError("Error in JSON options", err)
-			break
-		}
-
-		switch choice {
-		case "query":
-			queryJSON(response)
-		case "response":
-			displayResponse(response)
-		case "continue":
-			utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Another Request", "Main Menu")
-			return
-		}
-	}
-}
-
-func queryJSON(response *HTTPResponse) {
-	query, err := utils.AskInput(utils.InputConfig{
-		Title:       "Enter JSON Query",
-		Description: "Examples: .name, .users[0].email, .data.items",
-		Placeholder: ".field.subfield",
-	})
-
-	if err != nil {
-		utils.ShowError("Error getting query input", err)
-		return
-	}
-
-	if strings.TrimSpace(query) == "" {
-		utils.ShowMessage("No query provided")
-		return
-	}
-
-	result := executeJSONQuery(response.ParsedJSON, query)
-	displayQueryResult(query, result)
-}
-
-func executeJSONQuery(data any, query string) any {
-	if data == nil {
-		return "null"
-	}
-
-	query = strings.TrimPrefix(query, ".")
-	if query == "" {
-		return data
-	}
-
-	parts := strings.Split(query, ".")
-	current := data
-
-	for _, part := range parts {
-		if current == nil {
-			return "null"
-		}
-
-		if strings.Contains(part, "[") && strings.Contains(part, "]") {
-			current = handleArrayAccess(current, part)
-		} else {
-			current = handleFieldAccess(current, part)
-		}
-
-		if current == nil {
-			return "Field not found"
-		}
-	}
-
-	return current
-}
-
-func handleArrayAccess(data any, accessor string) any {
-	parts := strings.Split(accessor, "[")
-	fieldName := parts[0]
-	indexStr := strings.TrimSuffix(parts[1], "]")
-
-	index, err := strconv.Atoi(indexStr)
-	if err != nil {
-		return "Invalid array index"
-	}
-
-	if fieldName != "" {
-		data = handleFieldAccess(data, fieldName)
-		if data == nil {
-			return nil
-		}
-	}
-
-	switch arr := data.(type) {
-	case []any:
-		if index < 0 || index >= len(arr) {
-			return "Array index out of bounds"
-		}
-		return arr[index]
-	default:
-		return "Not an array"
-	}
-}
-
-func handleFieldAccess(data any, field string) any {
-	switch obj := data.(type) {
-	case map[string]any:
-		return obj[field]
-	case map[any]any:
-		return obj[field]
-	default:
-		return nil
-	}
-}
-
-func displayQueryResult(query string, result any) {
-	var resultStr string
-
-	if result == nil {
-		resultStr = "null"
-	} else {
-		switch v := result.(type) {
-		case string:
-			resultStr = v
-		case map[string]any, []any:
-			if jsonBytes, err := json.MarshalIndent(v, "", "  "); err == nil {
-				resultStr = string(jsonBytes)
-			} else {
-				resultStr = fmt.Sprintf("%v", v)
-			}
-		default:
-			resultStr = fmt.Sprintf("%v", v)
-		}
-	}
-
-	displayText := fmt.Sprintf("Query: %s\n\nResult:\n%s", query, resultStr)
-	utils.DisplayFormattedText("🔍 Query Result", displayText)
 }
 
 // Body Type Selection
@@ -562,12 +352,12 @@ func handleRequestOptions(method string, endpoint string, body string) hc.Reques
 
 	// Add Headers?
 	if addHeaders, _ := utils.AskConfirmation("Add Headers?", "", "", ""); addHeaders {
-		options.Headers = collectKeyValuePairs("Header", "Content-Type", "application/json")
+		options.Headers = utils.CollectKeyValuePairs("Header", "Content-Type", "application/json")
 	}
 
 	// Add Query Parameters?
 	if addParams, _ := utils.AskConfirmation("Add Query Parameters?", "", "", ""); addParams {
-		options.QueryParams = collectKeyValuePairs("Parameter", "page", "1")
+		options.QueryParams = utils.CollectKeyValuePairs("Parameter", "page", "1")
 	}
 
 	// Authentication?
@@ -581,12 +371,19 @@ func handleRequestOptions(method string, endpoint string, body string) hc.Reques
 	// Add Files/Images? (for POST/PUT only)
 	if method == "POST" || method == "PUT" {
 		if addFiles, _ := utils.AskConfirmation("Add Files/Images?", "", "", ""); addFiles {
-			//options.Files = handleFileUploads()
+			options.Files = handleFileUploads()
 		}
 	}
 
-	// Save as Template?
-	//	options.SaveAsTemplate, _ = utils.AskConfirmation("Save as Template?", "", "", "")
+	options.IsTemplate, _ = utils.AskConfirmation("Save as Template?", "", "", "")
+	if options.IsTemplate {
+		options.Name, _ = utils.AskInput(utils.InputConfig{
+			Title:       "Name",
+			Description: "Enter a name for your template",
+			Placeholder: "Get products",
+			Required:    true,
+		})
+	}
 
 	return options
 }
@@ -631,38 +428,6 @@ func applyAuthentication(options *hc.RequestOptions, authType, authValue string)
 	default:
 		utils.ShowWarning(fmt.Sprintf("Unknown authentication type: %s", authType))
 	}
-}
-
-func collectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string) map[string]string {
-	items := make(map[string]string)
-
-	for {
-		inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
-			{
-				Title:       fmt.Sprintf("%s Key:", itemType),
-				Placeholder: keyPlaceholder,
-				Required:    true,
-			},
-			{
-				Title:       fmt.Sprintf("%s Value:", itemType),
-				Placeholder: valuePlaceholder,
-				Required:    true,
-			},
-		})
-
-		if err != nil || len(inputs) < 2 || inputs[0] == "" {
-			break
-		}
-
-		items[strings.TrimSpace(inputs[0])] = strings.TrimSpace(inputs[1])
-
-		addMore, _ := utils.AskConfirmation(fmt.Sprintf("Add another %s?", strings.ToLower(itemType)), "", "", "")
-		if !addMore {
-			break
-		}
-	}
-
-	return items
 }
 
 func handleAuthentication() (string, string) {
@@ -822,8 +587,8 @@ func handleAuthProfile() (string, string) {
 	}
 }
 
-func handleFileUploads() []FileUpload {
-	var files []FileUpload
+func handleFileUploads() map[string]string {
+	var files map[string]string
 
 	for {
 		inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
@@ -843,10 +608,7 @@ func handleFileUploads() []FileUpload {
 			break
 		}
 
-		files = append(files, FileUpload{
-			Path:      strings.TrimSpace(inputs[0]),
-			FieldName: strings.TrimSpace(inputs[1]),
-		})
+		files[strings.TrimSpace(inputs[1])] = strings.TrimSpace(inputs[0])
 
 		addMore, _ := utils.AskConfirmation("Add another file?", "", "", "")
 		if !addMore {
@@ -857,21 +619,3 @@ func handleFileUploads() []FileUpload {
 	return files
 }
 
-func FormatJSON(data []byte) ([]byte, bool) {
-	if len(data) == 0 {
-		return data, false
-	}
-
-	var raw any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return data, false
-	}
-
-	formatted, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return data, false
-	}
-
-	formatted = bytes.TrimSuffix(formatted, []byte("\n"))
-	return formatted, true
-}

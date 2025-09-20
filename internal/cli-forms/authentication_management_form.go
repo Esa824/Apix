@@ -6,26 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/Esa824/apix/internal/model"
 	"github.com/Esa824/apix/internal/utils"
 )
 
-// AuthProfile represents an authentication profile
-type AuthProfile struct {
-	Name     string     `json:"name"`
-	Type     string     `json:"type"` // "bearer", "apikey", "basic", "oauth"
-	Token    string     `json:"token"`
-	Username string     `json:"username"`
-	Password string     `json:"password"`
-	APIKey   string     `json:"api_key"`
-	Header   string     `json:"header"`
-	Expiry   *time.Time `json:"expiry"`
-	Active   bool       `json:"active"`
-}
-
 // Global storage for auth profiles (in a real app, this would be persisted)
-var AuthProfiles = make(map[string]*AuthProfile)
+var AuthProfiles = make(map[string]*model.AuthProfile)
 var ActiveProfile string
 
 // initAuthProfilesDir ensures the auth-profiles directory exists
@@ -35,7 +22,7 @@ func initAuthProfilesDir() error {
 }
 
 // saveAuthProfile saves a single auth profile to a JSON file
-func saveAuthProfile(profile *AuthProfile) error {
+func saveAuthProfile(profile *model.AuthProfile) error {
 	if err := initAuthProfilesDir(); err != nil {
 		return fmt.Errorf("failed to create auth-profiles directory: %w", err)
 	}
@@ -78,7 +65,7 @@ func loadAuthProfiles() error {
 		return fmt.Errorf("failed to read auth-profiles directory: %w", err)
 	}
 
-	AuthProfiles = make(map[string]*AuthProfile)
+	AuthProfiles = make(map[string]*model.AuthProfile)
 	ActiveProfile = ""
 
 	for _, entry := range entries {
@@ -93,7 +80,7 @@ func loadAuthProfiles() error {
 			continue
 		}
 
-		var profile AuthProfile
+		var profile model.AuthProfile
 		if err := json.Unmarshal(data, &profile); err != nil {
 			utils.ShowWarning(fmt.Sprintf("Failed to parse auth profile file %s: %v", entry.Name(), err))
 			continue
@@ -127,7 +114,7 @@ func HandleAuthenticationManagement() {
 		{"Back to Main Menu", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("🔐 Authentication Management:", options)
+	selectedOption, err := utils.AskSelection("Authentication Management:", options)
 	if err != nil {
 		utils.ShowError("Error running authentication form", err)
 		return
@@ -201,7 +188,7 @@ func handleCreateProfile() {
 	}
 
 	// Step 3: Setup auth-specific details
-	profile := &AuthProfile{
+	profile := &model.AuthProfile{
 		Name: profileName,
 		Type: authType,
 	}
@@ -255,7 +242,7 @@ func handleCreateProfile() {
 	askContinueOrReturnAuth()
 }
 
-func handleBearerTokenSetup(profile *AuthProfile) bool {
+func handleBearerTokenSetup(profile *model.AuthProfile) bool {
 	// Get bearer token
 	tokenConfig := utils.InputConfig{
 		Title:       "Bearer Token:",
@@ -306,7 +293,7 @@ func handleBearerTokenSetup(profile *AuthProfile) bool {
 	return true
 }
 
-func handleAPIKeySetup(profile *AuthProfile) bool {
+func handleAPIKeySetup(profile *model.AuthProfile) bool {
 	configs := []utils.InputConfig{
 		{
 			Title:       "API Key:",
@@ -339,7 +326,7 @@ func handleAPIKeySetup(profile *AuthProfile) bool {
 	return true
 }
 
-func handleBasicAuthSetup(profile *AuthProfile) bool {
+func handleBasicAuthSetup(profile *model.AuthProfile) bool {
 	configs := []utils.InputConfig{
 		{
 			Title:       "Username:",
@@ -376,7 +363,7 @@ func handleSelectProfile() {
 		return
 	}
 
-	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *AuthProfile) string {
+	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *model.AuthProfile) string {
 		label := fmt.Sprintf("%s (%s)", name, strings.ToUpper(profile.Type))
 		if name == ActiveProfile {
 			label += " [ACTIVE]"
@@ -420,7 +407,7 @@ func handleEditProfile() {
 		return
 	}
 
-	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *AuthProfile) string {
+	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *model.AuthProfile) string {
 		return fmt.Sprintf("%s (%s)", name, strings.ToUpper(profile.Type))
 	})
 
@@ -465,7 +452,7 @@ func handleDeleteProfile() {
 		return
 	}
 
-	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *AuthProfile) string {
+	options := utils.CreateOptionsFromMap(AuthProfiles, func(name string, profile *model.AuthProfile) string {
 		return fmt.Sprintf("%s (%s)", name, strings.ToUpper(profile.Type))
 	})
 
@@ -513,13 +500,13 @@ func handleViewProfiles() {
 	}
 
 	if len(AuthProfiles) == 0 {
-		utils.ShowMessage("📋 No auth profiles configured.")
+		utils.ShowMessage("No auth profiles configured.")
 		askContinueOrReturnAuth()
 		return
 	}
 
 	var profilesText strings.Builder
-	profilesText.WriteString("📋 Authentication Profiles:\n")
+	profilesText.WriteString("Authentication Profiles:\n")
 	profilesText.WriteString("─────────────────────────────────\n\n")
 
 	for name, profile := range AuthProfiles {
@@ -528,7 +515,7 @@ func handleViewProfiles() {
 			status = " [ACTIVE] "
 		}
 
-		profilesText.WriteString(fmt.Sprintf("🔑 %s%s\n", name, status))
+		profilesText.WriteString(fmt.Sprintf("%s%s\n", name, status))
 		profilesText.WriteString(fmt.Sprintf("   Type: %s\n", strings.ToUpper(profile.Type)))
 
 		switch profile.Type {
@@ -569,7 +556,7 @@ func askContinueOrReturnAuth() {
 }
 
 // GetActiveAuthProfile returns the currently active auth profile
-func GetActiveAuthProfile() *AuthProfile {
+func GetActiveAuthProfile() *model.AuthProfile {
 	// Load profiles if not already loaded
 	if len(AuthProfiles) == 0 {
 		if err := loadAuthProfiles(); err != nil {
@@ -584,11 +571,11 @@ func GetActiveAuthProfile() *AuthProfile {
 }
 
 // GetAllAuthProfiles returns all auth profiles
-func GetAllAuthProfiles() map[string]*AuthProfile {
+func GetAllAuthProfiles() map[string]*model.AuthProfile {
 	// Load profiles if not already loaded
 	if len(AuthProfiles) == 0 {
 		if err := loadAuthProfiles(); err != nil {
-			return make(map[string]*AuthProfile)
+			return make(map[string]*model.AuthProfile)
 		}
 	}
 	return AuthProfiles

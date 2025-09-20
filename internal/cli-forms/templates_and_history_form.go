@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/charmbracelet/huh"
 
 	hc "github.com/Esa824/apix/internal/http-client"
+	"github.com/Esa824/apix/internal/model"
 	"github.com/Esa824/apix/internal/utils"
 )
 
@@ -51,18 +53,17 @@ func handleTemplatesHistorySelection(selection string) {
 func handleSavedTemplates() {
 	var selectedOption string
 
-	// TODO: Replace with actual saved templates from storage
-	templates := getSavedTemplates()
+	templates, err := hc.GetTemplates()
 
 	options := []huh.Option[string]{}
 	for _, template := range templates {
-		options = append(options, huh.NewOption(fmt.Sprintf("%s (%s)", template.Name, template.Method), template.ID))
+		options = append(options, huh.NewOption(fmt.Sprintf("%s (%s)", template.Name, template.Method), strconv.Itoa(template.Id)))
 	}
 
 	// Add management options
 	options = append(options,
-		huh.NewOption("➕ Create New Template", "create-template"),
-		huh.NewOption("🔙 Back", "back"),
+		huh.NewOption("Create New Template", "create-template"),
+		huh.NewOption("Back", "back"),
 	)
 
 	form := huh.NewForm(
@@ -75,7 +76,7 @@ func handleSavedTemplates() {
 		),
 	)
 
-	err := form.Run()
+	err = form.Run()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -91,9 +92,12 @@ func handleTemplateSelection(selection string) {
 	case "back":
 		HandleTemplatesAndHistory()
 	default:
-		// It's a template ID
-		template := getTemplateByID(selection)
-		if template != nil {
+		selectionInt, err := strconv.Atoi(selection)
+		if err != nil {
+			return
+		}
+		template, err := hc.GetTemplateByID(selectionInt)
+		if template != nil || err != nil {
 			handleTemplateActions(template)
 		} else {
 			fmt.Println("Template not found")
@@ -102,7 +106,7 @@ func handleTemplateSelection(selection string) {
 	}
 }
 
-func handleTemplateActions(template *Template) {
+func handleTemplateActions(template *model.Template) {
 	var selectedAction string
 
 	form := huh.NewForm(
@@ -111,10 +115,10 @@ func handleTemplateActions(template *Template) {
 				Title(fmt.Sprintf("Template: %s", template.Name)).
 				Description(fmt.Sprintf("%s %s", template.Method, template.URL)).
 				Options(
-					huh.NewOption("▶️  Execute Template", "execute"),
-					huh.NewOption("✏️  Edit Template", "edit"),
-					huh.NewOption("🗑️  Delete Template", "delete"),
-					huh.NewOption("🔙 Back to Templates", "back"),
+					huh.NewOption("Execute Template", "execute"),
+					huh.NewOption("Edit Template", "edit"),
+					huh.NewOption("Delete Template", "delete"),
+					huh.NewOption("Back to Templates", "back"),
 				).
 				Value(&selectedAction),
 		),
@@ -191,7 +195,7 @@ func handleCreateTemplate() {
 			fmt.Printf("  Has Headers: Yes\n")
 		}
 	} else {
-		fmt.Println("❌ Template creation cancelled - missing required fields")
+		fmt.Println("Template creation cancelled - missing required fields")
 	}
 
 	askContinueOrReturnTemplates()
@@ -211,8 +215,8 @@ func handleRequestHistory() {
 
 	// Add management options
 	options = append(options,
-		huh.NewOption("🗑️  Clear History", "clear-history"),
-		huh.NewOption("🔙 Back", "back"),
+		huh.NewOption("Clear History", "clear-history"),
+		huh.NewOption("Back", "back"),
 	)
 
 	form := huh.NewForm(
@@ -312,8 +316,8 @@ func handleClearHistory() {
 
 	if confirmClear {
 		hc.DeleteHistory()
-		fmt.Println("🗑️  Clearing request history...")
-		fmt.Println("✓ Request history cleared successfully!")
+		fmt.Println("Clearing request history...")
+		fmt.Println("Request history cleared successfully!")
 	} else {
 		fmt.Println("History clearing cancelled.")
 	}
@@ -321,26 +325,26 @@ func handleClearHistory() {
 	askContinueOrReturnTemplates()
 }
 
-func executeTemplate(template *Template) {
-	fmt.Printf("▶️  Executing template: %s\n", template.Name)
+func executeTemplate(template *model.Template) {
+	fmt.Printf("Executing template: %s\n", template.Name)
 	fmt.Printf("   %s %s\n", template.Method, template.URL)
 
 	// TODO: Implement actual request execution
-	fmt.Println("✓ Request completed successfully!")
-	fmt.Println("📊 Response: 200 OK")
+	fmt.Println("Request completed successfully!")
+	fmt.Println("Response: 200 OK")
 
 	askContinueOrReturnTemplates()
 }
 
-func editTemplate(template *Template) {
+func editTemplate(template *model.Template) {
 	fmt.Printf("✏️  Editing template: %s\n", template.Name)
 	// TODO: Implement template editing - could reuse handleCreateTemplate with pre-filled values
-	fmt.Println("✓ Template updated successfully!")
+	fmt.Println("Template updated successfully!")
 
 	askContinueOrReturnTemplates()
 }
 
-func deleteTemplate(template *Template) {
+func deleteTemplate(template *model.Template) {
 	var confirmDelete bool
 
 	form := huh.NewForm(
@@ -362,8 +366,8 @@ func deleteTemplate(template *Template) {
 
 	if confirmDelete {
 		// TODO: Implement actual template deletion
-		fmt.Printf("🗑️  Deleting template: %s\n", template.Name)
-		fmt.Println("✓ Template deleted successfully!")
+		fmt.Printf("Deleting template: %s\n", template.Name)
+		fmt.Println("Template deleted successfully!")
 	} else {
 		fmt.Println("Template deletion cancelled.")
 	}
@@ -372,13 +376,9 @@ func deleteTemplate(template *Template) {
 }
 
 func reExecuteFromHistory(historyItem *hc.RequestOptions) {
-	fmt.Printf("🔄 Re-executing request: %s %s\n", historyItem.Method, historyItem.URL)
-
-	// TODO: Implement actual request re-execution
-	fmt.Println("✓ Request completed successfully!")
-	fmt.Println("📊 Response: 200 OK")
-
-	askContinueOrReturnTemplates()
+	fmt.Printf("Re-executing request: %s %s\n", historyItem.Method, historyItem.URL)
+	response, _ := hc.NewClient(10*time.Second).Do(*historyItem, false)
+	utils.HandleResponse(response, HandleTemplatesAndHistory, RunInteractiveMode, "Continue with templates & history", "Return to Main Menu")
 }
 
 func saveHistoryAsTemplate(historyItem *hc.RequestOptions) {
@@ -401,8 +401,8 @@ func saveHistoryAsTemplate(historyItem *hc.RequestOptions) {
 
 	if templateName != "" {
 		// TODO: Implement saving history item as template
-		fmt.Printf("💾 Saved as template: %s\n", templateName)
-		fmt.Println("✓ Template created successfully!")
+		fmt.Printf("Saved as template: %s\n", templateName)
+		fmt.Println("Template created successfully!")
 	} else {
 		fmt.Println("Template creation cancelled.")
 	}
@@ -459,34 +459,4 @@ func askContinueOrReturnTemplates() {
 		fmt.Println("Goodbye!")
 		os.Exit(0)
 	}
-}
-
-// Data structures - add these to your types file
-type Template struct {
-	ID      string
-	Name    string
-	Method  string
-	URL     string
-	Body    string
-	Headers string
-}
-
-// Placeholder functions - implement these based on your storage mechanism
-func getSavedTemplates() []Template {
-	// TODO: Read from storage
-	return []Template{
-		{ID: "1", Name: "Get Users", Method: "GET", URL: "https://api.example.com/users"},
-		{ID: "2", Name: "Create User", Method: "POST", URL: "https://api.example.com/users"},
-		{ID: "3", Name: "Update User", Method: "PUT", URL: "https://api.example.com/users/1"},
-	}
-}
-
-func getTemplateByID(id string) *Template {
-	templates := getSavedTemplates()
-	for _, template := range templates {
-		if template.ID == id {
-			return &template
-		}
-	}
-	return nil
 }

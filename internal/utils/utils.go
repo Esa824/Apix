@@ -1,12 +1,17 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/huh"
+
+	"github.com/Esa824/apix/internal/model"
 )
 
 // =============================================================================
@@ -517,4 +522,253 @@ func FilterMapByStatus[T interface{ GetActive() bool }](items map[string]T, acti
 
 func FormatTime(t time.Time) string {
 	return t.Format("Jan 2, 2006 3:04 PM")
+}
+
+// JSON Utilities
+func FormatJSON(data []byte) ([]byte, bool) {
+	if len(data) == 0 {
+		return data, false
+	}
+
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return data, false
+	}
+
+	formatted, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return data, false
+	}
+
+	formatted = bytes.TrimSuffix(formatted, []byte("\n"))
+	return formatted, true
+}
+
+// JSON Query Utilities
+func ExecuteJSONQuery(data any, query string) any {
+	if data == nil {
+		return "null"
+	}
+
+	query = strings.TrimPrefix(query, ".")
+	if query == "" {
+		return data
+	}
+
+	parts := strings.Split(query, ".")
+	current := data
+
+	for _, part := range parts {
+		if current == nil {
+			return "null"
+		}
+
+		if strings.Contains(part, "[") && strings.Contains(part, "]") {
+			current = handleArrayAccess(current, part)
+		} else {
+			current = handleFieldAccess(current, part)
+		}
+
+		if current == nil {
+			return "Field not found"
+		}
+	}
+
+	return current
+}
+
+func handleArrayAccess(data any, accessor string) any {
+	parts := strings.Split(accessor, "[")
+	fieldName := parts[0]
+	indexStr := strings.TrimSuffix(parts[1], "]")
+
+	index, err := strconv.Atoi(indexStr)
+	if err != nil {
+		return "Invalid array index"
+	}
+
+	if fieldName != "" {
+		data = handleFieldAccess(data, fieldName)
+		if data == nil {
+			return nil
+		}
+	}
+
+	switch arr := data.(type) {
+	case []any:
+		if index < 0 || index >= len(arr) {
+			return "Array index out of bounds"
+		}
+		return arr[index]
+	default:
+		return "Not an array"
+	}
+}
+
+func handleFieldAccess(data any, field string) any {
+	switch obj := data.(type) {
+	case map[string]any:
+		return obj[field]
+	case map[any]any:
+		return obj[field]
+	default:
+		return nil
+	}
+}
+
+// Response Parsing Utilities
+func ParseResponse(response any) *model.HTTPResponse {
+	var body []byte
+	var status string
+
+	// Use reflection or type assertion to extract data from response
+	if resp, ok := response.(interface{ Body() []byte }); ok {
+		body = resp.Body()
+	}
+
+	if resp, ok := response.(interface{ Status() string }); ok {
+		status = resp.Status()
+	}
+
+	formatted, isJSON := FormatJSON(body)
+
+	httpResp := &model.HTTPResponse{
+		Status:  status,
+		Body:    formatted,
+		IsJSON:  isJSON,
+		Headers: make(map[string]string),
+	}
+
+	if isJSON {
+		json.Unmarshal(formatted, &httpResp.ParsedJSON)
+	}
+
+	return httpResp
+}
+
+// Display Utilities
+func DisplayResponse(response *model.HTTPResponse) {
+	if string(response.Body) == "" {
+		response.Body = []byte("Not set")
+	}
+	responseText := fmt.Sprintf("Status: %s\n\nBody:\n%s",
+		response.Status,
+		string(response.Body))
+
+	DisplayFormattedText("🌐 HTTP Response", responseText)
+}
+
+func DisplayQueryResult(query string, result any) {
+	var resultStr string
+
+	if result == nil {
+		resultStr = "null"
+	} else {
+		switch v := result.(type) {
+		case string:
+			resultStr = v
+		case map[string]any, []any:
+			if jsonBytes, err := json.MarshalIndent(v, "", "  "); err == nil {
+				resultStr = string(jsonBytes)
+			} else {
+				resultStr = fmt.Sprintf("%v", v)
+			}
+		default:
+			resultStr = fmt.Sprintf("%v", v)
+		}
+	}
+
+	displayText := fmt.Sprintf("Query: %s\n\nResult:\n%s", query, resultStr)
+	DisplayFormattedText("🔍 Query Result", displayText)
+}
+
+// Key-Value Collection Utilities
+func CollectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string) map[string]string {
+	items := make(map[string]string)
+
+	for {
+		inputs, err := AskMultipleInputs([]InputConfig{
+			{
+				Title:       fmt.Sprintf("%s Key:", itemType),
+				Placeholder: keyPlaceholder,
+				Required:    true,
+			},
+			{
+				Title:       fmt.Sprintf("%s Value:", itemType),
+				Placeholder: valuePlaceholder,
+				Required:    true,
+			},
+		})
+
+		if err != nil || len(inputs) < 2 || inputs[0] == "" {
+			break
+		}
+
+		items[strings.TrimSpace(inputs[0])] = strings.TrimSpace(inputs[1])
+
+		addMore, _ := AskConfirmation(fmt.Sprintf("Add another %s?", strings.ToLower(itemType)), "", "", "")
+		if !addMore {
+			break
+		}
+	}
+
+	return items
+}
+
+// Enhanced response handler with JSON querying
+func HandleResponse(response any, continueAction, returnAction func(), continueLabel, returnLabel string) {
+	httpResp := ParseResponse(response)
+	DisplayResponse(httpResp)
+
+	if httpResp.IsJSON {
+		handleJSONQuerying(httpResp, continueAction, returnAction, continueLabel, returnLabel)
+	} else {
+		AskContinueOrReturn(continueAction, returnAction, continueLabel, returnLabel)
+	}
+}
+
+func handleJSONQuerying(response *model.HTTPResponse, continueAction, returnAction func(), continueLabel, returnLabel string) {
+	for {
+		choice, err := AskSelection("JSON Response Options", []SelectionOption{
+			{"Query JSON", "query"},
+			{"View Response", "response"},
+			{"Continue", "continue"},
+		})
+
+		if err != nil {
+			ShowError("Error in JSON options", err)
+			break
+		}
+
+		switch choice {
+		case "query":
+			queryJSON(response)
+		case "response":
+			DisplayResponse(response)
+		case "continue":
+			AskContinueOrReturn(continueAction, returnAction, continueLabel, returnLabel)
+			return
+		}
+	}
+}
+
+func queryJSON(response *model.HTTPResponse) {
+	query, err := AskInput(InputConfig{
+		Title:       "Enter JSON Query",
+		Description: "Examples: .name, .users[0].email, .data.items",
+		Placeholder: ".field.subfield",
+	})
+
+	if err != nil {
+		ShowError("Error getting query input", err)
+		return
+	}
+
+	if strings.TrimSpace(query) == "" {
+		ShowMessage("No query provided")
+		return
+	}
+
+	result := ExecuteJSONQuery(response.ParsedJSON, query)
+	DisplayQueryResult(query, result)
 }

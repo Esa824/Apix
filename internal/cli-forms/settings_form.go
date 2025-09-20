@@ -6,84 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Esa824/apix/internal/model"
 	"github.com/Esa824/apix/internal/utils"
 )
 
-// DisplaySettings manages output formatting preferences
-type DisplaySettings struct {
-	ResponseFormat  string // "pretty-json", "raw", "headers-only", "compact-json"
-	ColorOutput     bool
-	ShowTiming      bool
-	ShowHeaders     bool
-	ShowStatusCode  bool
-	MaxResponseSize int // in KB, 0 = unlimited
-	IndentSize      int // for pretty formatting
-	LineNumbers     bool
-	SyntaxHighlight bool
-}
-
-// BehaviorSettings manages application behavior
-type BehaviorSettings struct {
-	AutoSaveRequests       bool
-	ConfirmDeleteRequests  bool
-	ConfirmDestructive     bool
-	RequestTimeout         int // in seconds
-	MaxRetries             int
-	RetryDelay             int // in seconds
-	FollowRedirects        bool
-	MaxRedirects           int
-	ValidateSSL            bool
-	CacheResponses         bool
-	CacheDuration          int // in minutes
-	ShowProgressBar        bool
-	VerboseMode            bool
-	SaveFailedRequests     bool
-	AutoAddHeaders         bool
-	DefaultContentType     string
-	PreserveSessionCookies bool
-}
-
-// NetworkSettings manages connection preferences
-type NetworkSettings struct {
-	DefaultTimeout     int // in seconds
-	ConnectTimeout     int // in seconds
-	ReadTimeout        int // in seconds
-	WriteTimeout       int // in seconds
-	MaxConnections     int
-	UserAgent          string
-	ProxyURL           string
-	ProxyEnabled       bool
-	KeepAlive          bool
-	CompressionEnabled bool
-}
-
-// LoggingSettings manages request/response logging
-type LoggingSettings struct {
-	EnableLogging  bool
-	LogLevel       string // "debug", "info", "warn", "error"
-	LogFile        string
-	LogRequests    bool
-	LogResponses   bool
-	LogHeaders     bool
-	LogTiming      bool
-	RotateLogFiles bool
-	MaxLogSize     int // in MB
-	MaxLogFiles    int
-}
-
-// GlobalSettings holds all application settings
-type GlobalSettings struct {
-	Display   DisplaySettings
-	Behavior  BehaviorSettings
-	Network   NetworkSettings
-	Logging   LoggingSettings
-	Version   string
-	LastSaved time.Time
-}
-
 // Default settings
-var AppSettings = &GlobalSettings{
-	Display: DisplaySettings{
+var AppSettings = &model.GlobalSettings{
+	Display: model.DisplaySettings{
 		ResponseFormat:  "pretty-json",
 		ColorOutput:     true,
 		ShowTiming:      true,
@@ -94,7 +23,7 @@ var AppSettings = &GlobalSettings{
 		LineNumbers:     false,
 		SyntaxHighlight: true,
 	},
-	Behavior: BehaviorSettings{
+	Behavior: model.BehaviorSettings{
 		AutoSaveRequests:       false,
 		ConfirmDeleteRequests:  true,
 		ConfirmDestructive:     true,
@@ -113,7 +42,7 @@ var AppSettings = &GlobalSettings{
 		DefaultContentType:     "application/json",
 		PreserveSessionCookies: true,
 	},
-	Network: NetworkSettings{
+	Network: model.NetworkSettings{
 		DefaultTimeout:     30,
 		ConnectTimeout:     10,
 		ReadTimeout:        30,
@@ -124,7 +53,7 @@ var AppSettings = &GlobalSettings{
 		KeepAlive:          true,
 		CompressionEnabled: true,
 	},
-	Logging: LoggingSettings{
+	Logging: model.LoggingSettings{
 		EnableLogging:  false,
 		LogLevel:       "info",
 		LogFile:        "apix.log",
@@ -142,18 +71,18 @@ var AppSettings = &GlobalSettings{
 
 func HandleSettingsManagement() {
 	options := []utils.SelectionOption{
-		{"🎨 Display Settings", "display"},
-		{"⚙️ Behavior Settings", "behavior"},
-		{"🌐 Network Settings", "network"},
-		{"📝 Logging Settings", "logging"},
-		{"💾 Export Settings", "export"},
-		{"📥 Import Settings", "import"},
-		{"🔄 Reset to Defaults", "reset"},
-		{"📊 Current Settings Overview", "overview"},
-		{"🔙 Back to Main Menu", "back"},
+		{"Display Settings", "display"},
+		{"Behavior Settings", "behavior"},
+		{"Network Settings", "network"},
+		{"Logging Settings", "logging"},
+		{"Export Settings", "export"},
+		{"Import Settings", "import"},
+		{"Reset to Defaults", "reset"},
+		{"Current Settings Overview", "overview"},
+		{"Back to Main Menu", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("⚙️ Settings Management:", options)
+	selectedOption, err := utils.AskSelection("Settings Management:", options)
 	if err != nil {
 		utils.ShowError("Error running settings menu", err)
 		return
@@ -189,17 +118,17 @@ func handleSettingsSelection(selection string) {
 
 func handleDisplaySettings() {
 	options := []utils.SelectionOption{
-		{"📄 Response Format", "response-format"},
-		{"🌈 Color Output", "color-output"},
-		{"⏱️ Show Request Timing", "timing"},
-		{"📋 Show Headers", "headers"},
-		{"📊 Show Status Code", "status"},
-		{"📏 Max Response Size", "max-size"},
-		{"🔤 Formatting Options", "formatting"},
-		{"🔙 Back to Settings", "back"},
+		{"Response Format", "response-format"},
+		{"Color Output", "color-output"},
+		{"Show Request Timing", "timing"},
+		{"Show Headers", "headers"},
+		{"Show Status Code", "status"},
+		{"Max Response Size", "max-size"},
+		{"Formatting Options", "formatting"},
+		{"Back to Settings", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("🎨 Display Settings:", options)
+	selectedOption, err := utils.AskSelection("Display Settings:", options)
 	if err != nil {
 		utils.ShowError("Error in display settings", err)
 		return
@@ -260,7 +189,7 @@ func handleResponseFormat() {
 	}
 
 	selectedFormat, err := utils.AskSelection(
-		fmt.Sprintf("📄 Response Format (current: %s):", strings.ToUpper(strings.ReplaceAll(currentFormat, "-", " "))),
+		fmt.Sprintf("Response Format (current: %s):", strings.ToUpper(strings.ReplaceAll(currentFormat, "-", " "))),
 		options,
 	)
 	if err != nil {
@@ -317,10 +246,10 @@ func handleFormattingOptions() {
 		{fmt.Sprintf("Indent Size (current: %d)", AppSettings.Display.IndentSize), "indent"},
 		{fmt.Sprintf("Line Numbers (%s)", formatBoolStatus(AppSettings.Display.LineNumbers)), "line-numbers"},
 		{fmt.Sprintf("Syntax Highlighting (%s)", formatBoolStatus(AppSettings.Display.SyntaxHighlight)), "syntax"},
-		{"🔙 Back to Display Settings", "back"},
+		{"Back to Display Settings", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("🔤 Formatting Options:", options)
+	selectedOption, err := utils.AskSelection("Formatting Options:", options)
 	if err != nil {
 		utils.ShowError("Error in formatting options", err)
 		return
@@ -382,10 +311,10 @@ func handleBehaviorSettings() {
 		{fmt.Sprintf("SSL Validation (%s)", formatBoolStatus(AppSettings.Behavior.ValidateSSL)), "ssl"},
 		{fmt.Sprintf("Response Caching (%s)", formatBoolStatus(AppSettings.Behavior.CacheResponses)), "cache"},
 		{"Advanced Behavior Options", "advanced"},
-		{"🔙 Back to Settings", "back"},
+		{"Back to Settings", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("⚙️ Behavior Settings:", options)
+	selectedOption, err := utils.AskSelection("Behavior Settings:", options)
 	if err != nil {
 		utils.ShowError("Error in behavior settings", err)
 		return
@@ -555,10 +484,10 @@ func handleAdvancedBehavior() {
 		{fmt.Sprintf("Auto-add Headers (%s)", formatBoolStatus(AppSettings.Behavior.AutoAddHeaders)), "auto-headers"},
 		{fmt.Sprintf("Default Content-Type (%s)", AppSettings.Behavior.DefaultContentType), "content-type"},
 		{fmt.Sprintf("Preserve Cookies (%s)", formatBoolStatus(AppSettings.Behavior.PreserveSessionCookies)), "cookies"},
-		{"🔙 Back to Behavior Settings", "back"},
+		{"Back to Behavior Settings", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("🔧 Advanced Behavior Options:", options)
+	selectedOption, err := utils.AskSelection("Advanced Behavior Options:", options)
 	if err != nil {
 		utils.ShowError("Error in advanced behavior settings", err)
 		return
@@ -666,8 +595,8 @@ func handleResetSettings() {
 
 	if confirmed {
 		// Reset to defaults (create new instance)
-		*AppSettings = GlobalSettings{
-			Display: DisplaySettings{
+		*AppSettings = model.GlobalSettings{
+			Display: model.DisplaySettings{
 				ResponseFormat:  "pretty-json",
 				ColorOutput:     true,
 				ShowTiming:      true,
@@ -678,7 +607,7 @@ func handleResetSettings() {
 				LineNumbers:     false,
 				SyntaxHighlight: true,
 			},
-			Behavior: BehaviorSettings{
+			Behavior: model.BehaviorSettings{
 				AutoSaveRequests:       false,
 				ConfirmDeleteRequests:  true,
 				ConfirmDestructive:     true,
@@ -710,34 +639,34 @@ func handleResetSettings() {
 func showSettingsOverview() {
 	var overview strings.Builder
 
-	overview.WriteString("⚙️ Current Settings Overview\n")
+	overview.WriteString("Current Settings Overview\n")
 	overview.WriteString("═══════════════════════════════════════\n\n")
 
 	// Display Settings
-	overview.WriteString("🎨 Display:\n")
+	overview.WriteString("Display:\n")
 	overview.WriteString("─────────────────────────────────\n")
-	overview.WriteString(fmt.Sprintf("   Response Format: %s\n", strings.ToUpper(strings.ReplaceAll(AppSettings.Display.ResponseFormat, "-", " "))))
-	overview.WriteString(fmt.Sprintf("   Color Output: %s\n", formatBoolStatus(AppSettings.Display.ColorOutput)))
-	overview.WriteString(fmt.Sprintf("   Show Timing: %s\n", formatBoolStatus(AppSettings.Display.ShowTiming)))
-	overview.WriteString(fmt.Sprintf("   Show Headers: %s\n", formatBoolStatus(AppSettings.Display.ShowHeaders)))
-	overview.WriteString(fmt.Sprintf("   Max Response Size: %s\n", formatSize(AppSettings.Display.MaxResponseSize)))
+	overview.WriteString(fmt.Sprintf("Response Format: %s\n", strings.ToUpper(strings.ReplaceAll(AppSettings.Display.ResponseFormat, "-", " "))))
+	overview.WriteString(fmt.Sprintf("Color Output: %s\n", formatBoolStatus(AppSettings.Display.ColorOutput)))
+	overview.WriteString(fmt.Sprintf("Show Timing: %s\n", formatBoolStatus(AppSettings.Display.ShowTiming)))
+	overview.WriteString(fmt.Sprintf("Show Headers: %s\n", formatBoolStatus(AppSettings.Display.ShowHeaders)))
+	overview.WriteString(fmt.Sprintf("Max Response Size: %s\n", formatSize(AppSettings.Display.MaxResponseSize)))
 	overview.WriteString("\n")
 
 	// Behavior Settings
-	overview.WriteString("⚙️ Behavior:\n")
+	overview.WriteString("Behavior:\n")
 	overview.WriteString("─────────────────────────────────\n")
-	overview.WriteString(fmt.Sprintf("   Auto-save Requests: %s\n", formatBoolStatus(AppSettings.Behavior.AutoSaveRequests)))
-	overview.WriteString(fmt.Sprintf("   Confirm DELETE: %s\n", formatBoolStatus(AppSettings.Behavior.ConfirmDeleteRequests)))
-	overview.WriteString(fmt.Sprintf("   Request Timeout: %ds\n", AppSettings.Behavior.RequestTimeout))
-	overview.WriteString(fmt.Sprintf("   Max Retries: %d\n", AppSettings.Behavior.MaxRetries))
-	overview.WriteString(fmt.Sprintf("   Follow Redirects: %s\n", formatBoolStatus(AppSettings.Behavior.FollowRedirects)))
-	overview.WriteString(fmt.Sprintf("   SSL Validation: %s\n", formatBoolStatus(AppSettings.Behavior.ValidateSSL)))
+	overview.WriteString(fmt.Sprintf("Auto-save Requests: %s\n", formatBoolStatus(AppSettings.Behavior.AutoSaveRequests)))
+	overview.WriteString(fmt.Sprintf("Confirm DELETE: %s\n", formatBoolStatus(AppSettings.Behavior.ConfirmDeleteRequests)))
+	overview.WriteString(fmt.Sprintf("Request Timeout: %ds\n", AppSettings.Behavior.RequestTimeout))
+	overview.WriteString(fmt.Sprintf("Max Retries: %d\n", AppSettings.Behavior.MaxRetries))
+	overview.WriteString(fmt.Sprintf("Follow Redirects: %s\n", formatBoolStatus(AppSettings.Behavior.FollowRedirects)))
+	overview.WriteString(fmt.Sprintf("SSL Validation: %s\n", formatBoolStatus(AppSettings.Behavior.ValidateSSL)))
 	overview.WriteString("\n")
 
 	overview.WriteString("═══════════════════════════════════════")
-	overview.WriteString(fmt.Sprintf("\n📅 Last Updated: %s", AppSettings.LastSaved.Format("2006-01-02 15:04:05")))
+	overview.WriteString(fmt.Sprintf("\nLast Updated: %s", AppSettings.LastSaved.Format("2006-01-02 15:04:05")))
 
-	utils.DisplayFormattedText("📊 Settings Overview", overview.String())
+	utils.DisplayFormattedText("Settings Overview", overview.String())
 	askContinueOrReturnSettings()
 }
 
@@ -766,7 +695,7 @@ func formatSize(sizeKB int) string {
 }
 
 // GetCurrentSettings returns the current settings
-func GetCurrentSettings() *GlobalSettings {
+func GetCurrentSettings() *model.GlobalSettings {
 	return AppSettings
 }
 

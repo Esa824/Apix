@@ -4,19 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Esa824/apix/internal/model"
 	"github.com/Esa824/apix/internal/utils"
 )
 
-// HelpSection represents a help documentation section
-type HelpSection struct {
-	Title       string
-	Description string
-	Content     string
-	Examples    []string
-}
-
 // Global help content
-var HelpSections = map[string]*HelpSection{
+var HelpSections = map[string]*model.HelpSection{
 	"quick-start": {
 		Title:       "Quick Start Guide",
 		Description: "Get started with Apix in minutes",
@@ -28,10 +21,10 @@ var HelpSections = map[string]*HelpSection{
 4. Response Formatting: Built-in JSON formatting and error handling
 
 Basic workflow:
-• Choose HTTP method (GET, POST, PUT, DELETE)
-• Enter your API endpoint URL
-• Add request body (for POST/PUT)
-• View formatted response`,
+Choose HTTP method (GET, POST, PUT, DELETE)
+Enter your API endpoint URL
+Add request body (for POST/PUT)
+View formatted response`,
 		Examples: []string{
 			"apix --cli",
 			"apix get https://api.github.com/users/octocat",
@@ -44,24 +37,24 @@ Basic workflow:
 		Content: `Here are common usage patterns for different API scenarios:
 
 GET Requests:
-• Fetch user data
-• List resources
-• Check API status
+Fetch user data
+List resources
+Check API status
 
 POST Requests:
-• Create new resources
-• Submit form data
-• Upload content
+Create new resources
+Submit form data
+Upload content
 
 PUT Requests:
-• Update existing resources
-• Replace entire objects
-• Modify configurations
+Update existing resources
+Replace entire objects
+Modify configurations
 
 DELETE Requests:
-• Remove resources
-• Clean up data
-• Revoke permissions`,
+Remove resources
+Clean up data
+Revoke permissions`,
 		Examples: []string{
 			"# Get a user profile",
 			"apix get https://jsonplaceholder.typicode.com/users/1",
@@ -82,28 +75,28 @@ DELETE Requests:
 		Content: `Speed up your workflow with these keyboard shortcuts:
 
 Interactive Mode Navigation:
-• Tab / Shift+Tab: Move between fields
-• Enter: Confirm selection
-• Esc: Cancel current operation
-• Space: Toggle checkboxes/confirmations
-• Arrow Keys: Navigate options
+Tab / Shift+Tab: Move between fields
+Enter: Confirm selection
+Esc: Cancel current operation
+Space: Toggle checkboxes/confirmations
+Arrow Keys: Navigate options
 
 Form Controls:
-• Ctrl+C: Copy current input
-• Ctrl+V: Paste into input field
-• Ctrl+A: Select all text
-• Ctrl+U: Clear current line
-• Backspace: Delete character
+Ctrl+C: Copy current input
+Ctrl+V: Paste into input field
+Ctrl+A: Select all text
+Ctrl+U: Clear current line
+Backspace: Delete character
 
 Quick Actions:
-• Ctrl+D: Exit application
-• Ctrl+L: Clear screen (in supported terminals)`,
+Ctrl+D: Exit application
+Ctrl+L: Clear screen (in supported terminals)`,
 		Examples: []string{
-			"Tab → Move to next field",
-			"Enter → Submit form",
-			"Esc → Cancel operation",
-			"↑↓ → Navigate menu options",
-			"Space → Toggle selection",
+			"Tab Move to next field",
+			"Enter Submit form",
+			"Esc Cancel operation",
+			"↑→ Navigate menu options",
+			"Space Toggle selection",
 		},
 	},
 	"api-patterns": {
@@ -112,21 +105,21 @@ Quick Actions:
 		Content: `Learn common API integration patterns:
 
 REST API Basics:
-• GET /users - List all users
-• GET /users/123 - Get specific user
-• POST /users - Create new user
-• PUT /users/123 - Update user
-• DELETE /users/123 - Delete user
+GET /users - List all users
+GET /users/123 - Get specific user
+POST /users - Create new user
+PUT /users/123 - Update user
+DELETE /users/123 - Delete user
 
 Authentication Patterns:
-• Bearer Token: Authorization: Bearer <token>
-• API Key: X-API-Key: <key>
-• Basic Auth: username:password encoded
+Bearer Token: Authorization: Bearer <token>
+API Key: X-API-Key: <key>
+Basic Auth: username:password encoded
 
 Common Headers:
-• Content-Type: application/json
-• Accept: application/json
-• User-Agent: Apix/1.0`,
+Content-Type: application/json
+Accept: application/json
+User-Agent: Apix/1.0`,
 		Examples: []string{
 			"# GitHub API with token",
 			"apix get https://api.github.com/user",
@@ -147,28 +140,28 @@ Common Headers:
 		Content: `Having trouble? Here are solutions to common issues:
 
 Connection Issues:
-• Check your internet connection
-• Verify the API endpoint URL
-• Ensure the API server is running
-• Check firewall/proxy settings
+Check your internet connection
+Verify the API endpoint URL
+Ensure the API server is running
+Check firewall/proxy settings
 
 Authentication Errors:
-• Verify your API key/token is correct
-• Check if the token has expired
-• Ensure proper header format
-• Confirm API permissions
+Verify your API key/token is correct
+Check if the token has expired
+Ensure proper header format
+Confirm API permissions
 
 Response Issues:
-• Check API documentation for expected format
-• Verify request method (GET/POST/PUT/DELETE)
-• Ensure required fields are provided
-• Check Content-Type headers
+Check API documentation for expected format
+Verify request method (GET/POST/PUT/DELETE)
+Ensure required fields are provided
+Check Content-Type headers
 
 General Tips:
-• Start with simple GET requests
-• Use public APIs for testing
-• Check API rate limits
-• Review error messages carefully`,
+Start with simple GET requests
+Use public APIs for testing
+Check API rate limits
+Review error messages carefully`,
 		Examples: []string{
 			"# Test with a simple public API",
 			"apix get https://httpbin.org/get",
@@ -185,16 +178,16 @@ General Tips:
 
 func HandleHelpAndDocumentation() {
 	options := []utils.SelectionOption{
-		{"📚 Quick Start Guide", "quick-start"},
-		{"💡 Command Examples", "commands"},
-		{"⌨️ Keyboard Shortcuts", "shortcuts"},
-		{"🔧 Common API Patterns", "api-patterns"},
-		{"🩺 Troubleshooting Guide", "troubleshooting"},
-		{"📖 View All Documentation", "view-all"},
-		{"🔙 Back to Main Menu", "back"},
+		{"Quick Start Guide", "quick-start"},
+		{"Command Examples", "commands"},
+		{"Keyboard Shortcuts", "shortcuts"},
+		{"Common API Patterns", "api-patterns"},
+		{"Troubleshooting Guide", "troubleshooting"},
+		{"View All Documentation", "view-all"},
+		{"Back to Main Menu", "back"},
 	}
 
-	selectedOption, err := utils.AskSelection("📋 Help & Documentation:", options)
+	selectedOption, err := utils.AskSelection("Help & Documentation:", options)
 	if err != nil {
 		utils.ShowError("Error running help menu", err)
 		return
@@ -240,7 +233,7 @@ func showHelpSection(sectionKey string) {
 
 	// Add examples if they exist
 	if len(section.Examples) > 0 {
-		content.WriteString("💡 Examples:\n")
+		content.WriteString("Examples:\n")
 		content.WriteString("─────────────────────────────────\n")
 		for _, example := range section.Examples {
 			if strings.HasPrefix(example, "#") {
@@ -256,14 +249,14 @@ func showHelpSection(sectionKey string) {
 		}
 	}
 
-	utils.DisplayFormattedText(fmt.Sprintf("📋 %s", section.Title), content.String())
+	utils.DisplayFormattedText(fmt.Sprintf("%s", section.Title), content.String())
 	askContinueOrReturnHelp()
 }
 
 func showAllDocumentation() {
 	var allContent strings.Builder
 
-	allContent.WriteString("📚 Complete Apix Documentation\n")
+	allContent.WriteString("Complete Apix Documentation\n")
 	allContent.WriteString("═══════════════════════════════════════════\n\n")
 
 	// Order the sections for logical flow
@@ -275,14 +268,14 @@ func showAllDocumentation() {
 		}
 
 		section := HelpSections[sectionKey]
-		allContent.WriteString(fmt.Sprintf("📖 %s\n", section.Title))
+		allContent.WriteString(fmt.Sprintf("%s\n", section.Title))
 		allContent.WriteString("─────────────────────────────────\n")
 		allContent.WriteString(section.Description)
 		allContent.WriteString("\n\n")
 		allContent.WriteString(section.Content)
 
 		if len(section.Examples) > 0 {
-			allContent.WriteString("\n\n💡 Examples:\n")
+			allContent.WriteString("\n\nExamples:\n")
 			for _, example := range section.Examples {
 				if strings.HasPrefix(example, "#") {
 					allContent.WriteString(fmt.Sprintf("  %s\n", example))
@@ -296,9 +289,9 @@ func showAllDocumentation() {
 	}
 
 	allContent.WriteString("\n\n═══════════════════════════════════════════")
-	allContent.WriteString("\n🎯 Need more help? Check the project README or open an issue!")
+	allContent.WriteString("\nNeed more help? Check the project README or open an issue!")
 
-	utils.DisplayFormattedText("📚 Complete Documentation", allContent.String())
+	utils.DisplayFormattedText("Complete Documentation", allContent.String())
 	askContinueOrReturnHelp()
 }
 
@@ -312,17 +305,17 @@ func askContinueOrReturnHelp() {
 }
 
 // GetHelpSection returns a specific help section
-func GetHelpSection(sectionKey string) *HelpSection {
+func GetHelpSection(sectionKey string) *model.HelpSection {
 	return HelpSections[sectionKey]
 }
 
 // GetAllHelpSections returns all help sections
-func GetAllHelpSections() map[string]*HelpSection {
+func GetAllHelpSections() map[string]*model.HelpSection {
 	return HelpSections
 }
 
 // AddCustomHelpSection allows adding custom help content
-func AddCustomHelpSection(key string, section *HelpSection) {
+func AddCustomHelpSection(key string, section *model.HelpSection) {
 	HelpSections[key] = section
 }
 
@@ -334,18 +327,18 @@ func SearchHelpContent(searchTerm string) []string {
 	for _, section := range HelpSections {
 		// Search in title
 		if strings.Contains(strings.ToLower(section.Title), searchLower) {
-			results = append(results, fmt.Sprintf("📖 %s - %s", section.Title, section.Description))
+			results = append(results, fmt.Sprintf("%s - %s", section.Title, section.Description))
 		}
 
 		// Search in content
 		if strings.Contains(strings.ToLower(section.Content), searchLower) {
-			results = append(results, fmt.Sprintf("📄 Found in %s", section.Title))
+			results = append(results, fmt.Sprintf("Found in %s", section.Title))
 		}
 
 		// Search in examples
 		for _, example := range section.Examples {
 			if strings.Contains(strings.ToLower(example), searchLower) {
-				results = append(results, fmt.Sprintf("💡 Example in %s: %s", section.Title, example))
+				results = append(results, fmt.Sprintf("Example in %s: %s", section.Title, example))
 				break // Only show one example match per section
 			}
 		}
