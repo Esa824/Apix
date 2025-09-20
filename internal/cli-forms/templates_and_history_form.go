@@ -326,6 +326,63 @@ func handleClearHistory() {
 }
 
 func executeTemplate(template *model.Template) {
+	input, err := utils.AskInput(utils.InputConfig{
+		Title:       "Enter API endpoint:",
+		Description: "Will be appended to base URL if configured",
+		Placeholder: "/api/users or https://api.example.com/users",
+		Value:       template.URL,
+		Required:    true,
+	})
+
+	if err != nil || input == "" {
+		utils.ShowMessage("No endpoint provided. Returning to menu.")
+		utils.AskContinueOrReturn(HandleHttpRequests, RunInteractiveMode, "Try Again", "Main Menu")
+	}
+
+	_, body := handleBodyTypeSelection(template.Method, template.Body)
+	options := hc.RequestOptions{
+		Method:      template.Method,
+		URL:         input,
+		Body:        body,
+		Headers:     make(map[string]string),
+		QueryParams: make(map[string]string),
+		Time:        time.Now(),
+	}
+
+	// Add Headers?
+	if addHeaders, _ := utils.AskConfirmation("Add Headers?", "", "", ""); addHeaders {
+		options.Headers = utils.CollectKeyValuePairs("Header", "Content-Type", "application/json", template.Headers)
+	}
+
+	// Add Query Parameters?
+	if addParams, _ := utils.AskConfirmation("Add Query Parameters?", "", "", ""); addParams {
+		options.QueryParams = utils.CollectKeyValuePairs("Parameter", "page", "1", template.QueryParams)
+	}
+
+	// Authentication?
+	if addAuth, _ := utils.AskConfirmation("Add Authentication?", "", "", ""); addAuth {
+		authType, authValue := handleAuthentication()
+		if authType != "" && authValue != "" {
+			applyAuthentication(&options, authType, authValue)
+		}
+	}
+
+	// Add Files/Images? (for POST/PUT only)
+	if template.Method == "POST" || template.Method == "PUT" {
+		if addFiles, _ := utils.AskConfirmation("Add Files/Images?", "", "", ""); addFiles {
+			options.Files = handleFileUploads()
+		}
+	}
+
+	options.IsTemplate, _ = utils.AskConfirmation("Save as Template?", "", "", "")
+	if options.IsTemplate {
+		options.Name, _ = utils.AskInput(utils.InputConfig{
+			Title:       "Name",
+			Description: "Enter a name for your template",
+			Placeholder: "Get products",
+			Required:    true,
+		})
+	}
 	fmt.Printf("Executing template: %s\n", template.Name)
 	fmt.Printf("   %s %s\n", template.Method, template.URL)
 

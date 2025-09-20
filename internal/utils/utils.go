@@ -200,6 +200,7 @@ type InputConfig struct {
 	Title       string
 	Description string
 	Placeholder string
+	Value       string
 	Required    bool
 	Password    bool
 	Multiline   bool
@@ -207,7 +208,7 @@ type InputConfig struct {
 
 // AskInput presents a single input field with configuration
 func AskInput(config InputConfig) (string, error) {
-	var value string
+	value := config.Value
 	var input huh.Field
 
 	if config.Multiline {
@@ -253,6 +254,7 @@ func AskMultipleInputs(configs []InputConfig) ([]string, error) {
 	fields := make([]huh.Field, len(configs))
 
 	for i, config := range configs {
+		values[i] = config.Value
 		if config.Multiline {
 			textInput := huh.NewText().
 				Title(config.Title).
@@ -682,10 +684,16 @@ func DisplayQueryResult(query string, result any) {
 	DisplayFormattedText("🔍 Query Result", displayText)
 }
 
-// Key-Value Collection Utilities
-func CollectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string) map[string]string {
+// Enhanced CollectKeyValuePairs function with optional existing pairs
+func CollectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string, existingPairs ...map[string]string) map[string]string {
 	items := make(map[string]string)
 
+	// If existing pairs are provided, edit them first
+	if len(existingPairs) > 0 && existingPairs[0] != nil {
+		items = editExistingKeyValuePairs(itemType, existingPairs[0])
+	}
+
+	// Then allow adding new pairs
 	for {
 		inputs, err := AskMultipleInputs([]InputConfig{
 			{
@@ -699,20 +707,45 @@ func CollectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string) map
 				Required:    true,
 			},
 		})
-
 		if err != nil || len(inputs) < 2 || inputs[0] == "" {
 			break
 		}
-
 		items[strings.TrimSpace(inputs[0])] = strings.TrimSpace(inputs[1])
-
 		addMore, _ := AskConfirmation(fmt.Sprintf("Add another %s?", strings.ToLower(itemType)), "", "", "")
 		if !addMore {
 			break
 		}
 	}
-
 	return items
+}
+
+// Edit existing key-value pairs (only values can be edited, not keys)
+func editExistingKeyValuePairs(itemType string, existingPairs map[string]string) map[string]string {
+	editedItems := make(map[string]string)
+
+	// Cycle through each existing pair
+	for key, currentValue := range existingPairs {
+		fmt.Printf("Current %s: %s = %s\n", itemType, key, currentValue)
+
+		// Ask for new value (key cannot be edited)
+		newValue, err := AskInput(InputConfig{
+			Title:       fmt.Sprintf("Edit value for '%s':", key),
+			Description: fmt.Sprintf("Current value: %s", currentValue),
+			Placeholder: currentValue,
+			Value:       currentValue,
+			Required:    true,
+		})
+
+		if err != nil {
+			// If error, keep the original value
+			editedItems[key] = currentValue
+		} else {
+			// Use the new value (trimmed)
+			editedItems[key] = strings.TrimSpace(newValue)
+		}
+	}
+
+	return editedItems
 }
 
 // Enhanced response handler with JSON querying
