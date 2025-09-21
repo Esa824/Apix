@@ -8,5 +8,6 @@ type Template struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 	QueryParams map[string]string `json:"query_params,omitempty"`
 	Files       map[string]string `json:"files,omitempty"`
+	Auth        *Auth             `json:"auth,omitempty"`
 	Body        any               `json:"body,omitempty"`
 }

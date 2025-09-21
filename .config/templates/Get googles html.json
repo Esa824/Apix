@@ -1,0 +1,15 @@
+{
+  "id": 0,
+  "name": "Get googles html",
+  "method": "GET",
+  "url": "https://www.google.com",
+  "headers": {
+    "Content-type": "application/json"
+  },
+  "auth": {
+    "Type": "bearer",
+    "Primary": "skibidi",
+    "Secondary": ""
+  },
+  "body": ""
+}

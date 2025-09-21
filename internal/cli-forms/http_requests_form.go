@@ -10,6 +10,7 @@ import (
 	"time"
 
 	hc "github.com/Esa824/apix/internal/http-client"
+	"github.com/Esa824/apix/internal/model"
 	"github.com/Esa824/apix/internal/utils"
 )
 
@@ -853,7 +854,10 @@ func applyAuthentication(options *hc.RequestOptions, authType, authValue string)
 	switch authType {
 	case "bearer":
 		// Add Authorization header with Bearer token
-		options.Headers["Authorization"] = fmt.Sprintf(" Bearer %s", authValue)
+		options.Auth = &model.Auth{
+			Type:    authType,
+			Primary: authValue,
+		}
 
 	case "apikey":
 		// Parse the header:key format
@@ -861,10 +865,18 @@ func applyAuthentication(options *hc.RequestOptions, authType, authValue string)
 		if len(parts) == 2 {
 			headerName := parts[0]
 			apiKey := parts[1]
-			options.Headers[headerName] = apiKey
+			options.Auth = &model.Auth{
+				Type:      authType,
+				Primary:   headerName,
+				Secondary: apiKey,
+			}
+
 		} else {
-			// Fallback to default header if parsing fails
-			options.Headers["X-API-Key"] = authValue
+			options.Auth = &model.Auth{
+				Type:      authType,
+				Primary:   "X-API-Key",
+				Secondary: authValue,
+			}
 		}
 
 	case "basic":
@@ -873,16 +885,11 @@ func applyAuthentication(options *hc.RequestOptions, authType, authValue string)
 		if len(parts) == 2 {
 			username := parts[0]
 			password := parts[1]
-
-			// Option 1: Use the BasicAuth struct if your http client supports it
-			options.Auth = &hc.BasicAuth{
-				Username: username,
-				Password: password,
+			options.Auth = &model.Auth{
+				Type:      authType,
+				Primary:   username,
+				Secondary: password,
 			}
-
-			// Option 2: Or add Authorization header with base64 encoded credentials
-			// credentials := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
-			// options.Headers["Authorization"] = fmt.Sprintf("Basic %s", credentials)
 		}
 
 	default:
@@ -890,7 +897,14 @@ func applyAuthentication(options *hc.RequestOptions, authType, authValue string)
 	}
 }
 
-func handleAuthentication() (string, string) {
+func handleAuthentication(existingAuth ...model.Auth) (string, string) {
+	// If existing auth is provided, handle it based on its type
+	if len(existingAuth) > 0 {
+		auth := existingAuth[0]
+		return handleExistingAuth(auth)
+	}
+
+	// Original logic for new authentication
 	selectOptions := []utils.SelectionOption{
 		{"Bearer Token", "bearer"},
 		{"API Key", "apikey"},
@@ -900,19 +914,17 @@ func handleAuthentication() (string, string) {
 		selectOptions = append(selectOptions, utils.SelectionOption{"Use Auth Profile", "profile"})
 	}
 	authType, err := utils.AskSelection("Select Authentication Type:", selectOptions)
-
 	if err != nil {
 		utils.ShowError("Error selecting auth type", err)
 		return "", ""
 	}
-
 	switch authType {
 	case "bearer":
-		return handleBearerToken()
+		return handleBearerToken("")
 	case "apikey":
-		return handleAPIKey()
+		return handleAPIKey("", "")
 	case "basic":
-		return handleBasicAuth()
+		return handleBasicAuth("", "")
 	case "profile":
 		return handleAuthProfile()
 	default:
@@ -920,67 +932,169 @@ func handleAuthentication() (string, string) {
 	}
 }
 
-func handleBearerToken() (string, string) {
-	token, err := utils.AskInput(utils.InputConfig{
-		Title:       "Enter Bearer Token:",
-		Placeholder: "your-jwt-token-here",
-		Password:    true,
-		Required:    true,
-	})
+func handleExistingAuth(auth model.Auth) (string, string) {
+	switch auth.Type {
+	case "bearer":
+		return handleBearerToken(auth.Primary)
+	case "apikey":
+		return handleAPIKey(auth.Primary, auth.Secondary)
+	case "basic":
+		return handleBasicAuth(auth.Primary, auth.Secondary)
+	default:
+		// If type is not recognized, fall back to new auth selection
+		return handleAuthentication()
+	}
+}
+
+func handleBearerToken(existingToken string) (string, string) {
+	var token string
+	var err error
+
+	if existingToken != "" {
+		token, err = utils.AskInput(utils.InputConfig{
+			Title:       "Edit Bearer Token:",
+			Placeholder: "your-jwt-token-here",
+			Value:       existingToken,
+			Password:    true,
+			Required:    true,
+		})
+	} else {
+		token, err = utils.AskInput(utils.InputConfig{
+			Title:       "Enter Bearer Token:",
+			Placeholder: "your-jwt-token-here",
+			Password:    true,
+			Required:    true,
+		})
+	}
 
 	if err != nil {
 		utils.ShowError("Error getting bearer token", err)
 		return "", ""
 	}
-
 	return "bearer", token
 }
 
-func handleAPIKey() (string, string) {
-	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
-		{
-			Title:    "Enter API Key:",
+func handleAPIKey(existingAPIKey, existingHeader string) (string, string) {
+	var inputs []string
+	var err error
+
+	if existingAPIKey != "" && existingHeader != "" {
+		fmt.Printf("Current API Key: %s\n", maskToken(existingAPIKey))
+		fmt.Printf("Current Header: %s (cannot be changed)\n", existingHeader)
+
+		// Only allow editing the API key value, not the header
+		newAPIKey, err := utils.AskInput(utils.InputConfig{
+			Title:    "Edit API Key:",
+			Value:    existingAPIKey,
 			Password: true,
 			Required: true,
-		},
-		{
-			Title:       "Header Name (optional):",
-			Placeholder: "X-API-Key",
-		},
-	})
+		})
+		if err != nil {
+			utils.ShowError("Error getting API key", err)
+			return "", ""
+		}
 
-	if err != nil || len(inputs) < 2 {
-		utils.ShowError("Error getting API key", err)
-		return "", ""
+		return "apikey", fmt.Sprintf("%s:%s", existingHeader, newAPIKey)
+	} else {
+		// Original logic for new API key
+		inputs, err = utils.AskMultipleInputs([]utils.InputConfig{
+			{
+				Title:    "Enter API Key:",
+				Password: true,
+				Required: true,
+			},
+			{
+				Title:       "Header Name (optional):",
+				Placeholder: "X-API-Key",
+			},
+		})
+		if err != nil || len(inputs) < 2 {
+			utils.ShowError("Error getting API key", err)
+			return "", ""
+		}
+		headerName := inputs[1]
+		if headerName == "" {
+			headerName = "X-API-Key"
+		}
+		return "apikey", fmt.Sprintf("%s:%s", headerName, inputs[0])
 	}
-
-	headerName := inputs[1]
-	if headerName == "" {
-		headerName = "X-API-Key"
-	}
-
-	return "apikey", fmt.Sprintf("%s:%s", headerName, inputs[0])
 }
 
-func handleBasicAuth() (string, string) {
-	inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
-		{
-			Title:    "Username:",
-			Required: true,
-		},
-		{
-			Title:    "Password:",
-			Password: true,
-			Required: true,
-		},
-	})
+func handleBasicAuth(existingUsername, existingPassword string) (string, string) {
+	var inputs []string
+	var err error
+
+	if existingUsername != "" && existingPassword != "" {
+		fmt.Printf("Current Username: %s\n", existingUsername)
+		fmt.Printf("Current Password: %s\n", maskToken(existingPassword))
+
+		inputs, err = utils.AskMultipleInputs([]utils.InputConfig{
+			{
+				Title:    "Edit Username:",
+				Value:    existingUsername,
+				Required: true,
+			},
+			{
+				Title:    "Edit Password:",
+				Value:    existingPassword,
+				Password: true,
+				Required: true,
+			},
+		})
+	} else {
+		// Original logic for new basic auth
+		inputs, err = utils.AskMultipleInputs([]utils.InputConfig{
+			{
+				Title:    "Username:",
+				Required: true,
+			},
+			{
+				Title:    "Password:",
+				Password: true,
+				Required: true,
+			},
+		})
+	}
 
 	if err != nil || len(inputs) < 2 {
 		utils.ShowError("Error getting basic auth", err)
 		return "", ""
 	}
-
 	return "basic", fmt.Sprintf("%s:%s", inputs[0], inputs[1])
+}
+
+// Helper function to mask sensitive tokens for display
+func maskToken(token string) string {
+	if len(token) <= 8 {
+		return strings.Repeat("*", len(token))
+	}
+	return token[:4] + strings.Repeat("*", len(token)-8) + token[len(token)-4:]
+}
+
+// Helper function to parse existing auth data if you need to convert from string format
+func ParseAuthFromString(authType, authData string) model.Auth {
+	auth := model.Auth{Type: authType}
+
+	switch authType {
+	case "bearer":
+		auth.Primary = authData
+	case "apikey":
+		// Format: "header:apikey"
+		parts := strings.SplitN(authData, ":", 2)
+		if len(parts) == 2 {
+			auth.Secondary = parts[0] // header name
+			auth.Primary = parts[1]   // api key
+		}
+	case "basic":
+		// Format: "username:password"
+		parts := strings.SplitN(authData, ":", 2)
+		if len(parts) == 2 {
+			auth.Primary = parts[0]   // username
+			auth.Secondary = parts[1] // password
+		}
+	}
+
+	return auth
 }
 
 func handleAuthProfile() (string, string) {
@@ -1047,9 +1161,16 @@ func handleAuthProfile() (string, string) {
 	}
 }
 
-func handleFileUploads() map[string]string {
-	var files map[string]string
+// Enhanced handleFileUploads with optional existing files map
+func handleFileUploads(existingFiles ...map[string]string) map[string]string {
+	files := make(map[string]string)
 
+	// If existing files are provided, edit them first
+	if len(existingFiles) > 0 && existingFiles[0] != nil {
+		files = editExistingFiles(existingFiles[0])
+	}
+
+	// Then allow adding new files
 	for {
 		inputs, err := utils.AskMultipleInputs([]utils.InputConfig{
 			{
@@ -1063,18 +1184,43 @@ func handleFileUploads() map[string]string {
 				Required:    true,
 			},
 		})
-
 		if err != nil || len(inputs) < 2 || inputs[0] == "" {
 			break
 		}
-
 		files[strings.TrimSpace(inputs[1])] = strings.TrimSpace(inputs[0])
-
 		addMore, _ := utils.AskConfirmation("Add another file?", "", "", "")
 		if !addMore {
 			break
 		}
 	}
-
 	return files
+}
+
+// Edit existing files (field names cannot be changed, only file paths)
+func editExistingFiles(existingFiles map[string]string) map[string]string {
+	editedFiles := make(map[string]string)
+
+	// Cycle through each existing file
+	for fieldName, currentPath := range existingFiles {
+		fmt.Printf("Current file: %s = %s\n", fieldName, currentPath)
+
+		// Ask for new file path (field name cannot be edited)
+		newPath, err := utils.AskInput(utils.InputConfig{
+			Title:       fmt.Sprintf("Edit file path for field '%s':", fieldName),
+			Description: fmt.Sprintf("Current path: %s", currentPath),
+			Placeholder: currentPath,
+			Value:       currentPath,
+			Required:    true,
+		})
+
+		if err != nil {
+			// If error, keep the original path
+			editedFiles[fieldName] = currentPath
+		} else {
+			// Use the new path (trimmed)
+			editedFiles[fieldName] = strings.TrimSpace(newPath)
+		}
+	}
+
+	return editedFiles
 }

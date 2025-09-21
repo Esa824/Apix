@@ -1,0 +1,17 @@
+[
+  {
+    "Id": 0,
+    "Method": "GET",
+    "URL": "https://www.google.com",
+    "Headers": {},
+    "QueryParams": {},
+    "Files": null,
+    "Body": "",
+    "Cookies": null,
+    "Auth": null,
+    "Context": null,
+    "Time": "2025-09-21T15:06:27.984301017+03:00",
+    "IsTemplate": true,
+    "Name": "GET "
+  }
+]

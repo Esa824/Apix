@@ -16,7 +16,7 @@ import (
 	"github.com/Esa824/apix/internal/model"
 )
 
-var ConfigPath = "./testconfigs/config1/"
+var ConfigPath = ".config/"
 
 type Client struct {
 	resty *resty.Client
@@ -39,16 +39,11 @@ type RequestOptions struct {
 	Files       map[string]string
 	Body        any
 	Cookies     map[string]string
-	Auth        *BasicAuth
+	Auth        *model.Auth
 	Context     context.Context
 	Time        time.Time
 	IsTemplate  bool
 	Name        string
-}
-
-type BasicAuth struct {
-	Username string
-	Password string
 }
 
 func (c *Client) Do(opts RequestOptions, saveToHistory bool) (*resty.Response, error) {
@@ -84,7 +79,15 @@ func (c *Client) Do(opts RequestOptions, saveToHistory bool) (*resty.Response, e
 	}
 
 	if opts.Auth != nil {
-		req = req.SetBasicAuth(opts.Auth.Username, opts.Auth.Password)
+		switch opts.Auth.Type {
+		case "bearer":
+			req = req.SetAuthToken(opts.Auth.Primary)
+		case "apikey":
+			req = req.SetHeader(opts.Auth.Primary, opts.Auth.Secondary)
+		case "basic":
+			req = req.SetBasicAuth(opts.Auth.Primary, opts.Auth.Secondary)
+		}
+
 	}
 
 	response, err := req.Execute(opts.Method, opts.URL)
@@ -95,11 +98,14 @@ func (c *Client) Do(opts RequestOptions, saveToHistory bool) (*resty.Response, e
 
 		if opts.IsTemplate {
 			SaveTemplate(model.Template{
-				Name:    opts.Name,
-				Method:  opts.Method,
-				URL:     opts.URL,
-				Headers: opts.Headers,
-				Body:    opts.Body,
+				Name:        opts.Name,
+				Method:      opts.Method,
+				URL:         opts.URL,
+				Headers:     opts.Headers,
+				QueryParams: opts.QueryParams,
+				Files:       opts.Files,
+				Auth:        opts.Auth,
+				Body:        opts.Body,
 			})
 		}
 	}
@@ -321,19 +327,25 @@ func SaveTemplate(template model.Template) error {
 	return saveTemplate(&template)
 }
 
-// UpdateTemplate updates an existing template by name
-func UpdateTemplate(template model.Template) error {
-	// Check if template exists first
+// UpdateTemplate updates an existing template and handles renaming
+func UpdateTemplate(updated model.Template, oldName string) error {
 	templatesMap, err := loadTemplates()
 	if err != nil {
 		return fmt.Errorf("failed to load existing templates: %w", err)
 	}
 
-	if _, exists := templatesMap[template.Name]; !exists {
-		return fmt.Errorf("template with name '%s' not found", template.Name)
+	if _, exists := templatesMap[oldName]; !exists {
+		return fmt.Errorf("template with name '%s' not found", oldName)
 	}
 
-	return saveTemplate(&template)
+	// If the name changed, delete the old file first
+	if updated.Name != oldName {
+		if err := deleteTemplateFile(oldName); err != nil {
+			return fmt.Errorf("failed to delete old template file: %w", err)
+		}
+	}
+
+	return saveTemplate(&updated)
 }
 
 // DeleteTemplate removes a template by name

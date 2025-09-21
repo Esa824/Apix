@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/huh"
+	"github.com/tidwall/gjson"
 
 	"github.com/Esa824/apix/internal/model"
 )
@@ -549,61 +549,57 @@ func FormatJSON(data []byte) ([]byte, bool) {
 // JSON Query Utilities
 func ExecuteJSONQuery(data any, query string) any {
 	if data == nil {
-		return "null"
+		return nil
 	}
 
-	query = strings.TrimPrefix(query, ".")
-	if query == "" {
+	// Convert data to JSON bytes for gjson
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Sprintf("Error marshaling data: %v", err)
+	}
+
+	// Handle empty query - return the entire data
+	if query == "" || query == "." {
 		return data
 	}
 
-	parts := strings.Split(query, ".")
-	current := data
-
-	for _, part := range parts {
-		if current == nil {
-			return "null"
-		}
-
-		if strings.Contains(part, "[") && strings.Contains(part, "]") {
-			current = handleArrayAccess(current, part)
-		} else {
-			current = handleFieldAccess(current, part)
-		}
-
-		if current == nil {
-			return "Field not found"
-		}
+	// Remove leading dot if present (gjson doesn't require it)
+	if query[0] == '.' {
+		query = query[1:]
 	}
 
-	return current
-}
+	// Execute the query using gjson
+	result := gjson.GetBytes(jsonBytes, query)
 
-func handleArrayAccess(data any, accessor string) any {
-	parts := strings.Split(accessor, "[")
-	fieldName := parts[0]
-	indexStr := strings.TrimSuffix(parts[1], "]")
-
-	index, err := strconv.Atoi(indexStr)
-	if err != nil {
-		return "Invalid array index"
+	// Handle different result types
+	if !result.Exists() {
+		return nil
 	}
 
-	if fieldName != "" {
-		data = handleFieldAccess(data, fieldName)
-		if data == nil {
-			return nil
+	// Return the appropriate Go type based on gjson result
+	switch result.Type {
+	case gjson.String:
+		return result.String()
+	case gjson.Number:
+		if result.Num == float64(int64(result.Num)) {
+			return int64(result.Num)
 		}
-	}
-
-	switch arr := data.(type) {
-	case []any:
-		if index < 0 || index >= len(arr) {
-			return "Array index out of bounds"
+		return result.Num
+	case gjson.True:
+		return true
+	case gjson.False:
+		return false
+	case gjson.JSON:
+		// For objects and arrays, parse back to Go types
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(result.Raw), &parsed); err != nil {
+			return result.Raw // Return raw JSON string if unmarshal fails
 		}
-		return arr[index]
+		return parsed
+	case gjson.Null:
+		return nil
 	default:
-		return "Not an array"
+		return result.Value()
 	}
 }
 
@@ -691,6 +687,7 @@ func CollectKeyValuePairs(itemType, keyPlaceholder, valuePlaceholder string, exi
 	// If existing pairs are provided, edit them first
 	if len(existingPairs) > 0 && existingPairs[0] != nil {
 		items = editExistingKeyValuePairs(itemType, existingPairs[0])
+		return items
 	}
 
 	// Then allow adding new pairs
