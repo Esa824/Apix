@@ -13,5 +13,50 @@
     "Time": "2025-09-21T15:06:27.984301017+03:00",
     "IsTemplate": true,
     "Name": "GET "
+  },
+  {
+    "Id": 1,
+    "Method": "GET",
+    "URL": "https://www.google.com",
+    "Headers": null,
+    "QueryParams": null,
+    "Files": null,
+    "Body": null,
+    "Cookies": null,
+    "Auth": null,
+    "Context": null,
+    "Time": "0001-01-01T00:00:00Z",
+    "IsTemplate": false,
+    "Name": ""
+  },
+  {
+    "Id": 2,
+    "Method": "GET",
+    "URL": "https://www.google.com",
+    "Headers": null,
+    "QueryParams": null,
+    "Files": null,
+    "Body": null,
+    "Cookies": null,
+    "Auth": null,
+    "Context": null,
+    "Time": "0001-01-01T00:00:00Z",
+    "IsTemplate": false,
+    "Name": ""
+  },
+  {
+    "Id": 3,
+    "Method": "GET",
+    "URL": "https://www.google.com",
+    "Headers": null,
+    "QueryParams": null,
+    "Files": null,
+    "Body": null,
+    "Cookies": null,
+    "Auth": null,
+    "Context": null,
+    "Time": "0001-01-01T00:00:00Z",
+    "IsTemplate": false,
+    "Name": ""
   }
 ]

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -801,4 +802,43 @@ func queryJSON(response *model.HTTPResponse) {
 
 	result := ExecuteJSONQuery(response.ParsedJSON, query)
 	DisplayQueryResult(query, result)
+}
+
+// NormalizeURL automatically adds appropriate protocol to URLs
+func NormalizeURL(url string) string {
+	// Remove any leading/trailing whitespace
+	url = strings.TrimSpace(url)
+
+	// If empty, return as is
+	if url == "" {
+		return url
+	}
+
+	// If already has a protocol (http:// or https://), return as is
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return url
+	}
+
+	// Check if it's just a port number (like "8081", ":8081", "3000", etc.)
+	portOnlyRegex := regexp.MustCompile(`^:?\d+$`)
+	if portOnlyRegex.MatchString(url) {
+		// Remove leading colon if present
+		port := strings.TrimPrefix(url, ":")
+		return "http://localhost:" + port
+	}
+
+	// Check if it's localhost with port (like "localhost:8081")
+	localhostRegex := regexp.MustCompile(`^localhost:\d+`)
+	if localhostRegex.MatchString(url) {
+		return "http://" + url
+	}
+
+	// Check if it's an IP address with port (like "127.0.0.1:8081", "192.168.1.100:3000")
+	ipPortRegex := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+`)
+	if ipPortRegex.MatchString(url) {
+		return "http://" + url
+	}
+
+	// For everything else (domain names, etc.), default to https://
+	return "https://" + url
 }

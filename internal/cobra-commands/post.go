@@ -2,8 +2,11 @@ package cobracommands
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/charmbracelet/huh"
+	hc "github.com/Esa824/apix/internal/http-client"
+	"github.com/Esa824/apix/internal/utils"
+
 	"github.com/spf13/cobra"
 )
 
@@ -12,39 +15,20 @@ var PostCmd = &cobra.Command{
 	Short: "Make a POST request to the specified URL",
 	Long:  `Make a POST request to the specified URL with optional body, headers and parameters.`,
 	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Making POST request to: %s\n", args[0])
-		// TODO: Implement POST request logic
-	},
+	RunE:  handlePostRequest,
 }
 
-func HandlePostRequest() {
-	var url, body string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter URL for POST request:").
-				Placeholder("https://api.example.com/users").
-				Value(&url),
-			huh.NewText().
-				Title("Enter request body (JSON):").
-				Placeholder(`{"name": "John", "email": "john@example.com"}`).
-				Value(&body),
-		),
-	)
-
-	err := form.Run()
+func handlePostRequest(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("Argument not provided")
+	}
+	opts, err := GetRequestOptionsFromFlags(cmd)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+		return err
 	}
-
-	if url != "" {
-		fmt.Printf("Making POST request to: %s\n", url)
-		if body != "" {
-			fmt.Printf("With body: %s\n", body)
-		}
-		// TODO: Implement actual POST request
-	}
+	opts.Method = "POST"
+	opts.URL = utils.NormalizeURL(args[0])
+	response, err := hc.NewClient(10*time.Second).Do(*opts, true)
+	fmt.Print(response)
+	return err
 }

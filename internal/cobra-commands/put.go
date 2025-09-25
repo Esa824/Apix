@@ -2,8 +2,11 @@ package cobracommands
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/charmbracelet/huh"
+	hc "github.com/Esa824/apix/internal/http-client"
+	"github.com/Esa824/apix/internal/utils"
+
 	"github.com/spf13/cobra"
 )
 
@@ -12,39 +15,20 @@ var PutCmd = &cobra.Command{
 	Short: "Make a PUT request to the specified URL",
 	Long:  `Make a PUT request to the specified URL with optional body, headers and parameters.`,
 	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Making PUT request to: %s\n", args[0])
-		// TODO: Implement PUT request logic
-	},
+	RunE:  handlePutRequest,
 }
 
-func HandlePutRequest() {
-	var url, body string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter URL for PUT request:").
-				Placeholder("https://api.example.com/users/1").
-				Value(&url),
-			huh.NewText().
-				Title("Enter request body (JSON):").
-				Placeholder(`{"name": "John Updated", "email": "john.updated@example.com"}`).
-				Value(&body),
-		),
-	)
-
-	err := form.Run()
+func handlePutRequest(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("Argument not provided")
+	}
+	opts, err := GetRequestOptionsFromFlags(cmd)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+		return err
 	}
-
-	if url != "" {
-		fmt.Printf("Making PUT request to: %s\n", url)
-		if body != "" {
-			fmt.Printf("With body: %s\n", body)
-		}
-		// TODO: Implement actual PUT request
-	}
+	opts.Method = "PUT"
+	opts.URL = utils.NormalizeURL(args[0])
+	response, err := hc.NewClient(10*time.Second).Do(*opts, true)
+	fmt.Print(response)
+	return err
 }
